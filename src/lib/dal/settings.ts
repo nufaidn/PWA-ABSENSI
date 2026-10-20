@@ -17,7 +17,7 @@ export interface EffectiveSchedule {
   lateToleranceMinutes: number;
   breakMinutes: number;
   /** True when this came from the organization default rather than the user. */
-  isDefault: boolean;
+  isOrganizationDefault: boolean;
 }
 
 /** Fallback used before the database is seeded or if configuration is missing. */
@@ -28,7 +28,7 @@ const FALLBACK_SCHEDULE: EffectiveSchedule = {
   endTime: "18:00",
   lateToleranceMinutes: 10,
   breakMinutes: 60,
-  isDefault: true,
+  isOrganizationDefault: true,
 };
 
 export const SETTINGS_ID = 1;
@@ -70,7 +70,7 @@ function toEffectiveSchedule(
     WorkSchedule,
     "id" | "name" | "startTime" | "endTime" | "lateToleranceMinutes" | "breakMinutes"
   >,
-  isDefault: boolean,
+  isOrganizationDefault: boolean,
 ): EffectiveSchedule {
   return {
     id: schedule.id,
@@ -79,7 +79,7 @@ function toEffectiveSchedule(
     endTime: schedule.endTime,
     lateToleranceMinutes: schedule.lateToleranceMinutes,
     breakMinutes: schedule.breakMinutes,
-    isDefault,
+    isOrganizationDefault,
   };
 }
 
