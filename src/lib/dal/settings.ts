@@ -58,7 +58,7 @@ export const getEffectiveSchedule = cache(async (userId: string): Promise<Effect
   }
 
   const anyDefault = await db.workSchedule.findFirst({
-    where: { isDefault: true, isActive: true },
+    where: { isOrganizationDefault: true, isActive: true },
     orderBy: { createdAt: "asc" },
   });
 

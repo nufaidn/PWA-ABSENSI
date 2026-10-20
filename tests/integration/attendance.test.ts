@@ -401,7 +401,7 @@ describe("personal schedule overrides the organization default", () => {
         endTime: "23:00",
         lateToleranceMinutes: 0,
         breakMinutes: 0,
-        isDefault: false,
+        isOrganizationDefault: false,
         isOrganizationDefault: false,
         isActive: true,
       },

@@ -98,6 +98,13 @@ model WorkSchedule {
   name         String   @unique
   description  String?
   isActive     Boolean  @default(true)
+  
+  /// Denormalized from first working day for backward compatibility
+  startTime    String   @db.VarChar(5) @default("09:00")
+  endTime      String   @db.VarChar(5) @default("18:00")
+  lateToleranceMinutes Int @default(0)
+  breakMinutes Int @default(60)
+  
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

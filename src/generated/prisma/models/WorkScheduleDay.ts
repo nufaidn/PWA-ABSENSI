@@ -460,14 +460,6 @@ export type WorkScheduleDayUncheckedUpdateManyWithoutScheduleNestedInput = {
   deleteMany?: Prisma.WorkScheduleDayScalarWhereInput | Prisma.WorkScheduleDayScalarWhereInput[]
 }
 
-export type IntFieldUpdateOperationsInput = {
-  set?: number
-  increment?: number
-  decrement?: number
-  multiply?: number
-  divide?: number
-}
-
 export type WorkScheduleDayCreateWithoutScheduleInput = {
   id?: string
   dayOfWeek: number

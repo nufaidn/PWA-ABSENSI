@@ -96,7 +96,7 @@ export default async function ProfilePage() {
                 <dd className="tabular mt-0.5 text-[13.5px]">
                   {schedule.name} · {schedule.startTime}–{schedule.endTime} · toleransi{" "}
                   {schedule.lateToleranceMinutes} menit
-                  {schedule.isDefault ? " (default organisasi)" : ""}
+                  {schedule.isOrganizationDefault ? " (default organisasi)" : ""}
                 </dd>
               </div>
             </dl>

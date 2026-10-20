@@ -38,7 +38,7 @@ export interface ScheduleFormValues {
   lateToleranceMinutes: number;
   breakMinutes: number;
   isActive: boolean;
-  isDefault: boolean;
+  isOrganizationDefault: boolean;
   assignedCount: number;
 }
 
@@ -50,7 +50,7 @@ const EMPTY: ScheduleFormValues = {
   lateToleranceMinutes: 10,
   breakMinutes: 60,
   isActive: true,
-  isDefault: false,
+  isOrganizationDefault: false,
   assignedCount: 0,
 };
 
@@ -123,7 +123,7 @@ function ScheduleFields({ values }: { values: ScheduleFormValues }) {
             defaultValue={values.breakMinutes}
             className="min-h-10"
           />
-<p className="text-[11.5px] leading-relaxed text-muted-foreground">
+          <p className="text-[11.5px] leading-relaxed text-muted-foreground">
             Durasi yang tercatat dihitung dari check-in sampai check-out tanpa
             pemotongan, jadi nilai ini tidak dipakai untuk mengurangi durasi.
           </p>
@@ -146,7 +146,7 @@ function ScheduleFields({ values }: { values: ScheduleFormValues }) {
             type="checkbox"
             name="makeDefault"
             value="true"
-            defaultChecked={values.isDefault}
+            defaultChecked={values.isOrganizationDefault}
             className="size-4 rounded border-input accent-[oklch(0.552_0.213_262.4)]"
           />
           Jadikan jadwal default organisasi
@@ -308,7 +308,7 @@ export function ScheduleList({ schedules }: { schedules: ScheduleFormValues[] })
                 <p className="truncate text-[13.5px] font-medium text-foreground">
                   {schedule.name}
                 </p>
-                {schedule.isDefault ? (
+                {schedule.isOrganizationDefault ? (
                   <Chip className="border-primary/30 text-primary">
                     <Star className="mr-1 size-3" />
                     Default

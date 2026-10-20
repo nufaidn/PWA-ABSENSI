@@ -1003,6 +1003,10 @@ export const WorkScheduleScalarFieldEnum = {
   name: 'name',
   description: 'description',
   isActive: 'isActive',
+  startTime: 'startTime',
+  endTime: 'endTime',
+  lateToleranceMinutes: 'lateToleranceMinutes',
+  breakMinutes: 'breakMinutes',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt',
   isOrganizationDefault: 'isOrganizationDefault'

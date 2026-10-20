@@ -1,4 +1,4 @@
-﻿import "server-only";
+import "server-only";
 import { cache } from "react";
 import bcrypt from "bcryptjs";
 import type { Prisma, Role, User } from "@/generated/prisma/client";
@@ -175,7 +175,7 @@ export interface CreateEmployeeInput {
  * **A preview, not a reservation.** Two calls a moment apart both return the same
  * number when nothing has been created in between, because this only reads. That
  * is fine for showing a suggestion in the form, and the create path does not rely
- * on it — `createEmployee` allocates *inside the same locked transaction as the
+ * on it � `createEmployee` allocates *inside the same locked transaction as the
  * insert*, which is what actually makes the number exclusive.
  *
  * Returns null for roles that do not use codes (admins sign in by email).
@@ -224,7 +224,7 @@ async function nextCodeForPrefix(
  * `EMP-002` and one would still fail on the unique index. Holding the lock
  * across the insert is what turns the number into a guarantee.
  *
- * A code supplied by the admin is used as-is and never auto-corrected — if it is
+ * A code supplied by the admin is used as-is and never auto-corrected � if it is
  * taken, they should be told rather than silently given a different identity.
  */
 async function createWithAssignedCode(
@@ -491,7 +491,7 @@ export async function createSchedule(input: ScheduleInput): Promise<ScheduleWith
 
   const created = await db.$transaction(async (tx) => {
     if (input.makeDefault) {
-      await tx.workSchedule.updateMany({ data: { isDefault: false, isOrganizationDefault: false } });
+      await tx.workSchedule.updateMany({ data: { isOrganizationDefault: false } });
     }
     return tx.workSchedule.create({
       data: {
@@ -501,7 +501,6 @@ export async function createSchedule(input: ScheduleInput): Promise<ScheduleWith
         lateToleranceMinutes: input.lateToleranceMinutes,
         breakMinutes: input.breakMinutes,
         isActive: input.isActive,
-        isDefault: input.makeDefault,
         isOrganizationDefault: input.makeDefault,
       },
       include: { _count: { select: { users: true } } },
@@ -528,7 +527,7 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
 
   const updated = await db.$transaction(async (tx) => {
     if (input.makeDefault) {
-      await tx.workSchedule.updateMany({ data: { isDefault: false, isOrganizationDefault: false } });
+      await tx.workSchedule.updateMany({ data: { isOrganizationDefault: false } });
     }
     return tx.workSchedule.update({
       where: { id },
@@ -539,7 +538,7 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
         lateToleranceMinutes: input.lateToleranceMinutes,
         breakMinutes: input.breakMinutes,
         isActive: input.isActive,
-        ...(input.makeDefault ? { isDefault: true, isOrganizationDefault: true } : {}),
+        ...(input.makeDefault ? { isOrganizationDefault: true } : {}),
       },
       include: { _count: { select: { users: true } } },
     });

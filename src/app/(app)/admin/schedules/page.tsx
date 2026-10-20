@@ -55,7 +55,7 @@ export default async function SchedulesPage() {
               lateToleranceMinutes: schedule.lateToleranceMinutes,
               breakMinutes: schedule.breakMinutes,
               isActive: schedule.isActive,
-              isDefault: schedule.isDefault,
+              isDefault: schedule.isOrganizationDefault,
               assignedCount: schedule._count.users,
             }))}
           />
