@@ -91,30 +91,22 @@ model User {
   @@map("users")
 }
 
-/// Single shift configuration with per-day settings.
-/// Each day (Mon-Sun) can have different start/end times.
+/// Single shift configuration.
 model WorkSchedule {
   id           String   @id @default(cuid())
   name         String   @unique
   description  String?
-  isActive     Boolean  @default(true)
-  
-  /// Denormalized from first working day for backward compatibility
-  startTime    String   @db.VarChar(5) @default("09:00")
-  endTime      String   @db.VarChar(5) @default("18:00")
+  startTime    String   @db.VarChar(5)
+  endTime      String   @db.VarChar(5)
   lateToleranceMinutes Int @default(0)
   breakMinutes Int @default(60)
-  
+  isActive     Boolean  @default(true)
+  isOrganizationDefault Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  /// Day schedules for this shift (one per weekday).
   daySchedules WorkScheduleDay[]
-
   users User[]
-
-  /// True when this schedule is referenced by Setting.defaultScheduleId.
-  isOrganizationDefault Boolean  @default(false)
   usedAsOrganizationDefault Setting[]
 
   @@map("work_schedules")

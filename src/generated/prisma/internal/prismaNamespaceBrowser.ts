@@ -98,14 +98,14 @@ export const WorkScheduleScalarFieldEnum = {
   id: 'id',
   name: 'name',
   description: 'description',
-  isActive: 'isActive',
   startTime: 'startTime',
   endTime: 'endTime',
   lateToleranceMinutes: 'lateToleranceMinutes',
   breakMinutes: 'breakMinutes',
+  isActive: 'isActive',
+  isOrganizationDefault: 'isOrganizationDefault',
   createdAt: 'createdAt',
-  updatedAt: 'updatedAt',
-  isOrganizationDefault: 'isOrganizationDefault'
+  updatedAt: 'updatedAt'
 } as const
 
 export type WorkScheduleScalarFieldEnum = (typeof WorkScheduleScalarFieldEnum)[keyof typeof WorkScheduleScalarFieldEnum]

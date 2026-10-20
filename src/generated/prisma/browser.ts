@@ -24,8 +24,7 @@ export * from './enums';
 export type User = Prisma.UserModel
 /**
  * Model WorkSchedule
- * Single shift configuration with per-day settings.
- * Each day (Mon-Sun) can have different start/end times.
+ * Single shift configuration.
  */
 export type WorkSchedule = Prisma.WorkScheduleModel
 /**

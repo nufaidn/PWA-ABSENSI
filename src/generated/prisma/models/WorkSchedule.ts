@@ -14,8 +14,7 @@ import type * as Prisma from "../internal/prismaNamespace"
 
 /**
  * Model WorkSchedule
- * Single shift configuration with per-day settings.
- * Each day (Mon-Sun) can have different start/end times.
+ * Single shift configuration.
  */
 export type WorkScheduleModel = runtime.Types.Result.DefaultSelection<Prisma.$WorkSchedulePayload>
 
@@ -41,42 +40,42 @@ export type WorkScheduleMinAggregateOutputType = {
   id: string | null
   name: string | null
   description: string | null
-  isActive: boolean | null
   startTime: string | null
   endTime: string | null
   lateToleranceMinutes: number | null
   breakMinutes: number | null
+  isActive: boolean | null
+  isOrganizationDefault: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
-  isOrganizationDefault: boolean | null
 }
 
 export type WorkScheduleMaxAggregateOutputType = {
   id: string | null
   name: string | null
   description: string | null
-  isActive: boolean | null
   startTime: string | null
   endTime: string | null
   lateToleranceMinutes: number | null
   breakMinutes: number | null
+  isActive: boolean | null
+  isOrganizationDefault: boolean | null
   createdAt: Date | null
   updatedAt: Date | null
-  isOrganizationDefault: boolean | null
 }
 
 export type WorkScheduleCountAggregateOutputType = {
   id: number
   name: number
   description: number
-  isActive: number
   startTime: number
   endTime: number
   lateToleranceMinutes: number
   breakMinutes: number
+  isActive: number
+  isOrganizationDefault: number
   createdAt: number
   updatedAt: number
-  isOrganizationDefault: number
   _all: number
 }
 
@@ -95,42 +94,42 @@ export type WorkScheduleMinAggregateInputType = {
   id?: true
   name?: true
   description?: true
-  isActive?: true
   startTime?: true
   endTime?: true
   lateToleranceMinutes?: true
   breakMinutes?: true
+  isActive?: true
+  isOrganizationDefault?: true
   createdAt?: true
   updatedAt?: true
-  isOrganizationDefault?: true
 }
 
 export type WorkScheduleMaxAggregateInputType = {
   id?: true
   name?: true
   description?: true
-  isActive?: true
   startTime?: true
   endTime?: true
   lateToleranceMinutes?: true
   breakMinutes?: true
+  isActive?: true
+  isOrganizationDefault?: true
   createdAt?: true
   updatedAt?: true
-  isOrganizationDefault?: true
 }
 
 export type WorkScheduleCountAggregateInputType = {
   id?: true
   name?: true
   description?: true
-  isActive?: true
   startTime?: true
   endTime?: true
   lateToleranceMinutes?: true
   breakMinutes?: true
+  isActive?: true
+  isOrganizationDefault?: true
   createdAt?: true
   updatedAt?: true
-  isOrganizationDefault?: true
   _all?: true
 }
 
@@ -224,14 +223,14 @@ export type WorkScheduleGroupByOutputType = {
   id: string
   name: string
   description: string | null
-  isActive: boolean
   startTime: string
   endTime: string
   lateToleranceMinutes: number
   breakMinutes: number
+  isActive: boolean
+  isOrganizationDefault: boolean
   createdAt: Date
   updatedAt: Date
-  isOrganizationDefault: boolean
   _count: WorkScheduleCountAggregateOutputType | null
   _avg: WorkScheduleAvgAggregateOutputType | null
   _sum: WorkScheduleSumAggregateOutputType | null
@@ -261,14 +260,14 @@ export type WorkScheduleWhereInput = {
   id?: Prisma.StringFilter<"WorkSchedule"> | string
   name?: Prisma.StringFilter<"WorkSchedule"> | string
   description?: Prisma.StringNullableFilter<"WorkSchedule"> | string | null
-  isActive?: Prisma.BoolFilter<"WorkSchedule"> | boolean
   startTime?: Prisma.StringFilter<"WorkSchedule"> | string
   endTime?: Prisma.StringFilter<"WorkSchedule"> | string
   lateToleranceMinutes?: Prisma.IntFilter<"WorkSchedule"> | number
   breakMinutes?: Prisma.IntFilter<"WorkSchedule"> | number
+  isActive?: Prisma.BoolFilter<"WorkSchedule"> | boolean
+  isOrganizationDefault?: Prisma.BoolFilter<"WorkSchedule"> | boolean
   createdAt?: Prisma.DateTimeFilter<"WorkSchedule"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"WorkSchedule"> | Date | string
-  isOrganizationDefault?: Prisma.BoolFilter<"WorkSchedule"> | boolean
   daySchedules?: Prisma.WorkScheduleDayListRelationFilter
   users?: Prisma.UserListRelationFilter
   usedAsOrganizationDefault?: Prisma.SettingListRelationFilter
@@ -278,14 +277,14 @@ export type WorkScheduleOrderByWithRelationInput = {
   id?: Prisma.SortOrder
   name?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
-  isActive?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
   endTime?: Prisma.SortOrder
   lateToleranceMinutes?: Prisma.SortOrder
   breakMinutes?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  isOrganizationDefault?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  isOrganizationDefault?: Prisma.SortOrder
   daySchedules?: Prisma.WorkScheduleDayOrderByRelationAggregateInput
   users?: Prisma.UserOrderByRelationAggregateInput
   usedAsOrganizationDefault?: Prisma.SettingOrderByRelationAggregateInput
@@ -298,14 +297,14 @@ export type WorkScheduleWhereUniqueInput = Prisma.AtLeast<{
   OR?: Prisma.WorkScheduleWhereInput[]
   NOT?: Prisma.WorkScheduleWhereInput | Prisma.WorkScheduleWhereInput[]
   description?: Prisma.StringNullableFilter<"WorkSchedule"> | string | null
-  isActive?: Prisma.BoolFilter<"WorkSchedule"> | boolean
   startTime?: Prisma.StringFilter<"WorkSchedule"> | string
   endTime?: Prisma.StringFilter<"WorkSchedule"> | string
   lateToleranceMinutes?: Prisma.IntFilter<"WorkSchedule"> | number
   breakMinutes?: Prisma.IntFilter<"WorkSchedule"> | number
+  isActive?: Prisma.BoolFilter<"WorkSchedule"> | boolean
+  isOrganizationDefault?: Prisma.BoolFilter<"WorkSchedule"> | boolean
   createdAt?: Prisma.DateTimeFilter<"WorkSchedule"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"WorkSchedule"> | Date | string
-  isOrganizationDefault?: Prisma.BoolFilter<"WorkSchedule"> | boolean
   daySchedules?: Prisma.WorkScheduleDayListRelationFilter
   users?: Prisma.UserListRelationFilter
   usedAsOrganizationDefault?: Prisma.SettingListRelationFilter
@@ -315,14 +314,14 @@ export type WorkScheduleOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
   name?: Prisma.SortOrder
   description?: Prisma.SortOrderInput | Prisma.SortOrder
-  isActive?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
   endTime?: Prisma.SortOrder
   lateToleranceMinutes?: Prisma.SortOrder
   breakMinutes?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  isOrganizationDefault?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  isOrganizationDefault?: Prisma.SortOrder
   _count?: Prisma.WorkScheduleCountOrderByAggregateInput
   _avg?: Prisma.WorkScheduleAvgOrderByAggregateInput
   _max?: Prisma.WorkScheduleMaxOrderByAggregateInput
@@ -337,28 +336,28 @@ export type WorkScheduleScalarWhereWithAggregatesInput = {
   id?: Prisma.StringWithAggregatesFilter<"WorkSchedule"> | string
   name?: Prisma.StringWithAggregatesFilter<"WorkSchedule"> | string
   description?: Prisma.StringNullableWithAggregatesFilter<"WorkSchedule"> | string | null
-  isActive?: Prisma.BoolWithAggregatesFilter<"WorkSchedule"> | boolean
   startTime?: Prisma.StringWithAggregatesFilter<"WorkSchedule"> | string
   endTime?: Prisma.StringWithAggregatesFilter<"WorkSchedule"> | string
   lateToleranceMinutes?: Prisma.IntWithAggregatesFilter<"WorkSchedule"> | number
   breakMinutes?: Prisma.IntWithAggregatesFilter<"WorkSchedule"> | number
+  isActive?: Prisma.BoolWithAggregatesFilter<"WorkSchedule"> | boolean
+  isOrganizationDefault?: Prisma.BoolWithAggregatesFilter<"WorkSchedule"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"WorkSchedule"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"WorkSchedule"> | Date | string
-  isOrganizationDefault?: Prisma.BoolWithAggregatesFilter<"WorkSchedule"> | boolean
 }
 
 export type WorkScheduleCreateInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
   daySchedules?: Prisma.WorkScheduleDayCreateNestedManyWithoutScheduleInput
   users?: Prisma.UserCreateNestedManyWithoutScheduleInput
   usedAsOrganizationDefault?: Prisma.SettingCreateNestedManyWithoutDefaultScheduleInput
@@ -368,14 +367,14 @@ export type WorkScheduleUncheckedCreateInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
   daySchedules?: Prisma.WorkScheduleDayUncheckedCreateNestedManyWithoutScheduleInput
   users?: Prisma.UserUncheckedCreateNestedManyWithoutScheduleInput
   usedAsOrganizationDefault?: Prisma.SettingUncheckedCreateNestedManyWithoutDefaultScheduleInput
@@ -385,14 +384,14 @@ export type WorkScheduleUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   daySchedules?: Prisma.WorkScheduleDayUpdateManyWithoutScheduleNestedInput
   users?: Prisma.UserUpdateManyWithoutScheduleNestedInput
   usedAsOrganizationDefault?: Prisma.SettingUpdateManyWithoutDefaultScheduleNestedInput
@@ -402,14 +401,14 @@ export type WorkScheduleUncheckedUpdateInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   daySchedules?: Prisma.WorkScheduleDayUncheckedUpdateManyWithoutScheduleNestedInput
   users?: Prisma.UserUncheckedUpdateManyWithoutScheduleNestedInput
   usedAsOrganizationDefault?: Prisma.SettingUncheckedUpdateManyWithoutDefaultScheduleNestedInput
@@ -419,42 +418,42 @@ export type WorkScheduleCreateManyInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
 }
 
 export type WorkScheduleUpdateManyMutationInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
 export type WorkScheduleUncheckedUpdateManyInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
 }
 
 export type WorkScheduleNullableScalarRelationFilter = {
@@ -466,14 +465,14 @@ export type WorkScheduleCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   name?: Prisma.SortOrder
   description?: Prisma.SortOrder
-  isActive?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
   endTime?: Prisma.SortOrder
   lateToleranceMinutes?: Prisma.SortOrder
   breakMinutes?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  isOrganizationDefault?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  isOrganizationDefault?: Prisma.SortOrder
 }
 
 export type WorkScheduleAvgOrderByAggregateInput = {
@@ -485,28 +484,28 @@ export type WorkScheduleMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder
   name?: Prisma.SortOrder
   description?: Prisma.SortOrder
-  isActive?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
   endTime?: Prisma.SortOrder
   lateToleranceMinutes?: Prisma.SortOrder
   breakMinutes?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  isOrganizationDefault?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  isOrganizationDefault?: Prisma.SortOrder
 }
 
 export type WorkScheduleMinOrderByAggregateInput = {
   id?: Prisma.SortOrder
   name?: Prisma.SortOrder
   description?: Prisma.SortOrder
-  isActive?: Prisma.SortOrder
   startTime?: Prisma.SortOrder
   endTime?: Prisma.SortOrder
   lateToleranceMinutes?: Prisma.SortOrder
   breakMinutes?: Prisma.SortOrder
+  isActive?: Prisma.SortOrder
+  isOrganizationDefault?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
-  isOrganizationDefault?: Prisma.SortOrder
 }
 
 export type WorkScheduleSumOrderByAggregateInput = {
@@ -577,14 +576,14 @@ export type WorkScheduleCreateWithoutUsersInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
   daySchedules?: Prisma.WorkScheduleDayCreateNestedManyWithoutScheduleInput
   usedAsOrganizationDefault?: Prisma.SettingCreateNestedManyWithoutDefaultScheduleInput
 }
@@ -593,14 +592,14 @@ export type WorkScheduleUncheckedCreateWithoutUsersInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
   daySchedules?: Prisma.WorkScheduleDayUncheckedCreateNestedManyWithoutScheduleInput
   usedAsOrganizationDefault?: Prisma.SettingUncheckedCreateNestedManyWithoutDefaultScheduleInput
 }
@@ -625,14 +624,14 @@ export type WorkScheduleUpdateWithoutUsersInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   daySchedules?: Prisma.WorkScheduleDayUpdateManyWithoutScheduleNestedInput
   usedAsOrganizationDefault?: Prisma.SettingUpdateManyWithoutDefaultScheduleNestedInput
 }
@@ -641,14 +640,14 @@ export type WorkScheduleUncheckedUpdateWithoutUsersInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   daySchedules?: Prisma.WorkScheduleDayUncheckedUpdateManyWithoutScheduleNestedInput
   usedAsOrganizationDefault?: Prisma.SettingUncheckedUpdateManyWithoutDefaultScheduleNestedInput
 }
@@ -657,14 +656,14 @@ export type WorkScheduleCreateWithoutDaySchedulesInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
   users?: Prisma.UserCreateNestedManyWithoutScheduleInput
   usedAsOrganizationDefault?: Prisma.SettingCreateNestedManyWithoutDefaultScheduleInput
 }
@@ -673,14 +672,14 @@ export type WorkScheduleUncheckedCreateWithoutDaySchedulesInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
   users?: Prisma.UserUncheckedCreateNestedManyWithoutScheduleInput
   usedAsOrganizationDefault?: Prisma.SettingUncheckedCreateNestedManyWithoutDefaultScheduleInput
 }
@@ -705,14 +704,14 @@ export type WorkScheduleUpdateWithoutDaySchedulesInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   users?: Prisma.UserUpdateManyWithoutScheduleNestedInput
   usedAsOrganizationDefault?: Prisma.SettingUpdateManyWithoutDefaultScheduleNestedInput
 }
@@ -721,14 +720,14 @@ export type WorkScheduleUncheckedUpdateWithoutDaySchedulesInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   users?: Prisma.UserUncheckedUpdateManyWithoutScheduleNestedInput
   usedAsOrganizationDefault?: Prisma.SettingUncheckedUpdateManyWithoutDefaultScheduleNestedInput
 }
@@ -737,14 +736,14 @@ export type WorkScheduleCreateWithoutUsedAsOrganizationDefaultInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
   daySchedules?: Prisma.WorkScheduleDayCreateNestedManyWithoutScheduleInput
   users?: Prisma.UserCreateNestedManyWithoutScheduleInput
 }
@@ -753,14 +752,14 @@ export type WorkScheduleUncheckedCreateWithoutUsedAsOrganizationDefaultInput = {
   id?: string
   name: string
   description?: string | null
-  isActive?: boolean
-  startTime?: string
-  endTime?: string
+  startTime: string
+  endTime: string
   lateToleranceMinutes?: number
   breakMinutes?: number
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: Date | string
   updatedAt?: Date | string
-  isOrganizationDefault?: boolean
   daySchedules?: Prisma.WorkScheduleDayUncheckedCreateNestedManyWithoutScheduleInput
   users?: Prisma.UserUncheckedCreateNestedManyWithoutScheduleInput
 }
@@ -785,14 +784,14 @@ export type WorkScheduleUpdateWithoutUsedAsOrganizationDefaultInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   daySchedules?: Prisma.WorkScheduleDayUpdateManyWithoutScheduleNestedInput
   users?: Prisma.UserUpdateManyWithoutScheduleNestedInput
 }
@@ -801,14 +800,14 @@ export type WorkScheduleUncheckedUpdateWithoutUsedAsOrganizationDefaultInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   name?: Prisma.StringFieldUpdateOperationsInput | string
   description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
-  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
   startTime?: Prisma.StringFieldUpdateOperationsInput | string
   endTime?: Prisma.StringFieldUpdateOperationsInput | string
   lateToleranceMinutes?: Prisma.IntFieldUpdateOperationsInput | number
   breakMinutes?: Prisma.IntFieldUpdateOperationsInput | number
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
-  isOrganizationDefault?: Prisma.BoolFieldUpdateOperationsInput | boolean
   daySchedules?: Prisma.WorkScheduleDayUncheckedUpdateManyWithoutScheduleNestedInput
   users?: Prisma.UserUncheckedUpdateManyWithoutScheduleNestedInput
 }
@@ -866,14 +865,14 @@ export type WorkScheduleSelect<ExtArgs extends runtime.Types.Extensions.Internal
   id?: boolean
   name?: boolean
   description?: boolean
-  isActive?: boolean
   startTime?: boolean
   endTime?: boolean
   lateToleranceMinutes?: boolean
   breakMinutes?: boolean
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  isOrganizationDefault?: boolean
   daySchedules?: boolean | Prisma.WorkSchedule$daySchedulesArgs<ExtArgs>
   users?: boolean | Prisma.WorkSchedule$usersArgs<ExtArgs>
   usedAsOrganizationDefault?: boolean | Prisma.WorkSchedule$usedAsOrganizationDefaultArgs<ExtArgs>
@@ -884,45 +883,45 @@ export type WorkScheduleSelectCreateManyAndReturn<ExtArgs extends runtime.Types.
   id?: boolean
   name?: boolean
   description?: boolean
-  isActive?: boolean
   startTime?: boolean
   endTime?: boolean
   lateToleranceMinutes?: boolean
   breakMinutes?: boolean
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  isOrganizationDefault?: boolean
 }, ExtArgs["result"]["workSchedule"]>
 
 export type WorkScheduleSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
   name?: boolean
   description?: boolean
-  isActive?: boolean
   startTime?: boolean
   endTime?: boolean
   lateToleranceMinutes?: boolean
   breakMinutes?: boolean
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  isOrganizationDefault?: boolean
 }, ExtArgs["result"]["workSchedule"]>
 
 export type WorkScheduleSelectScalar = {
   id?: boolean
   name?: boolean
   description?: boolean
-  isActive?: boolean
   startTime?: boolean
   endTime?: boolean
   lateToleranceMinutes?: boolean
   breakMinutes?: boolean
+  isActive?: boolean
+  isOrganizationDefault?: boolean
   createdAt?: boolean
   updatedAt?: boolean
-  isOrganizationDefault?: boolean
 }
 
-export type WorkScheduleOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "description" | "isActive" | "startTime" | "endTime" | "lateToleranceMinutes" | "breakMinutes" | "createdAt" | "updatedAt" | "isOrganizationDefault", ExtArgs["result"]["workSchedule"]>
+export type WorkScheduleOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "description" | "startTime" | "endTime" | "lateToleranceMinutes" | "breakMinutes" | "isActive" | "isOrganizationDefault" | "createdAt" | "updatedAt", ExtArgs["result"]["workSchedule"]>
 export type WorkScheduleInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   daySchedules?: boolean | Prisma.WorkSchedule$daySchedulesArgs<ExtArgs>
   users?: boolean | Prisma.WorkSchedule$usersArgs<ExtArgs>
@@ -935,9 +934,6 @@ export type WorkScheduleIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types
 export type $WorkSchedulePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "WorkSchedule"
   objects: {
-    /**
-     * Day schedules for this shift (one per weekday).
-     */
     daySchedules: Prisma.$WorkScheduleDayPayload<ExtArgs>[]
     users: Prisma.$UserPayload<ExtArgs>[]
     usedAsOrganizationDefault: Prisma.$SettingPayload<ExtArgs>[]
@@ -946,20 +942,14 @@ export type $WorkSchedulePayload<ExtArgs extends runtime.Types.Extensions.Intern
     id: string
     name: string
     description: string | null
-    isActive: boolean
-    /**
-     * Denormalized from first working day for backward compatibility
-     */
     startTime: string
     endTime: string
     lateToleranceMinutes: number
     breakMinutes: number
+    isActive: boolean
+    isOrganizationDefault: boolean
     createdAt: Date
     updatedAt: Date
-    /**
-     * True when this schedule is referenced by Setting.defaultScheduleId.
-     */
-    isOrganizationDefault: boolean
   }, ExtArgs["result"]["workSchedule"]>
   composites: {}
 }
@@ -1389,14 +1379,14 @@ export interface WorkScheduleFieldRefs {
   readonly id: Prisma.FieldRef<"WorkSchedule", 'String'>
   readonly name: Prisma.FieldRef<"WorkSchedule", 'String'>
   readonly description: Prisma.FieldRef<"WorkSchedule", 'String'>
-  readonly isActive: Prisma.FieldRef<"WorkSchedule", 'Boolean'>
   readonly startTime: Prisma.FieldRef<"WorkSchedule", 'String'>
   readonly endTime: Prisma.FieldRef<"WorkSchedule", 'String'>
   readonly lateToleranceMinutes: Prisma.FieldRef<"WorkSchedule", 'Int'>
   readonly breakMinutes: Prisma.FieldRef<"WorkSchedule", 'Int'>
+  readonly isActive: Prisma.FieldRef<"WorkSchedule", 'Boolean'>
+  readonly isOrganizationDefault: Prisma.FieldRef<"WorkSchedule", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"WorkSchedule", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"WorkSchedule", 'DateTime'>
-  readonly isOrganizationDefault: Prisma.FieldRef<"WorkSchedule", 'Boolean'>
 }
     
 
