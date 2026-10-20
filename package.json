@@ -1,6 +1,6 @@
 {
   "name": "universal-attendance",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Universal Attendance System — aplikasi absensi karyawan responsif (PWA) berbasis Next.js, Prisma, dan PostgreSQL.",
   "scripts": {
