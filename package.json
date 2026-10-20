@@ -4,6 +4,7 @@
   "private": true,
   "description": "Universal Attendance System — aplikasi absensi karyawan responsif (PWA) berbasis Next.js, Prisma, dan PostgreSQL.",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
