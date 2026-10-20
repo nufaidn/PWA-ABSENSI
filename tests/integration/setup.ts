@@ -150,7 +150,6 @@ export async function seedSchedule(overrides: ScheduleSeed = {}) {
       endTime: overrides.endTime ?? "18:00",
       lateToleranceMinutes: overrides.lateToleranceMinutes ?? 10,
       breakMinutes: overrides.breakMinutes ?? 60,
-      isOrganizationDefault: true,
       isOrganizationDefault: overrides.isDefault !== false,
       isActive: true,
     },

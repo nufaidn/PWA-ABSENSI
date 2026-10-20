@@ -236,11 +236,11 @@ export async function updateSettingsAction(
       await db.$transaction([
         db.workSchedule.updateMany({
           where: { id: { not: parsed.data.defaultScheduleId } },
-          data: { isOrganizationDefault: false, isOrganizationDefault: false },
+          data: { isOrganizationDefault: false },
         }),
         db.workSchedule.update({
           where: { id: parsed.data.defaultScheduleId },
-          data: { isOrganizationDefault: true, isOrganizationDefault: true },
+          data: { isOrganizationDefault: true },
         }),
       ]);
     }
