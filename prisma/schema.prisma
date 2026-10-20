@@ -1,0 +1,233 @@
+// Universal Attendance System — database schema
+// Reference: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+/// Hierarchical role. Higher rank inherits the permissions of lower ranks.
+///
+/// `INTERN` and `EMPLOYEE` deliberately share a rank in `ROLE_RANK`
+/// (`src/lib/attendance/time.ts`): an intern has no additional privilege over a
+/// regular employee, so ranking one above the other would misrepresent the
+/// access model and invite future comparison bugs.
+enum Role {
+  EMPLOYEE
+  INTERN
+  ADMIN
+  SUPER_ADMIN
+}
+
+/// Daily attendance state, derived at check-in time from the effective schedule.
+enum AttendanceStatus {
+  /// Checked in within start time + late tolerance.
+  PRESENT
+  /// Checked in after start time + late tolerance.
+  LATE
+  /// Worked day with no attendance record created (created by admin/report job).
+  ABSENT
+  /// Checked in but never checked out. Recalculated at check-out.
+  INCOMPLETE
+  /// Approved time off. Set manually by an administrator.
+  LEAVE
+  /// Non-working day (weekend or public holiday).
+  HOLIDAY
+}
+
+/// Audited administrative actions.
+enum AuditAction {
+  EMPLOYEE_CREATED
+  EMPLOYEE_UPDATED
+  EMPLOYEE_DEACTIVATED
+  EMPLOYEE_REACTIVATED
+  EMPLOYEE_DELETED
+  EMPLOYEE_ROLE_CHANGED
+  EMPLOYEE_PASSWORD_RESET
+  SCHEDULE_CREATED
+  SCHEDULE_UPDATED
+  SCHEDULE_DELETED
+  ATTENDANCE_ADJUSTED
+  SETTINGS_UPDATED
+  LOCATION_CREATED
+  LOCATION_UPDATED
+  LOCATION_DELETED
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  employeeCode String?   @unique
+  role         Role      @default(EMPLOYEE)
+  department   String?
+  phone        String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  /// Personal schedule. When null the organization's default schedule applies.
+  scheduleId String?
+  schedule   WorkSchedule? @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+
+  attendances Attendance[]
+  auditLogs   AuditLog[]     @relation("AuditActor")
+
+  @@index([department])
+  @@index([role])
+  @@map("users")
+}
+
+/// Single shift configuration with per-day settings.
+/// Each day (Mon-Sun) can have different start/end times.
+model WorkSchedule {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  /// Day schedules for this shift (one per weekday).
+  daySchedules WorkScheduleDay[]
+
+  users User[]
+
+  /// True when this schedule is referenced by Setting.defaultScheduleId.
+  isOrganizationDefault Boolean  @default(false)
+  usedAsOrganizationDefault Setting[]
+
+  @@map("work_schedules")
+}
+
+/// Per-day schedule configuration (Monday-Sunday).
+/// Dayofweek: 0=Sunday, 1=Monday, ..., 6=Saturday.
+model WorkScheduleDay {
+  id           String   @id @default(cuid())
+  scheduleId   String
+  schedule     WorkSchedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+
+  /// 0=Sunday, 1=Monday, 2=Tuesday, ..., 6=Saturday.
+  dayOfWeek    Int      @db.SmallInt
+  /// Time of day the employee is expected to start, e.g. "09:00".
+  startTime    String   @db.VarChar(5)
+  /// Time of day the employee is expected to finish, e.g. "18:00".
+  endTime      String   @db.VarChar(5)
+  /// Minutes after startTime after which a check-in counts as late.
+  lateToleranceMinutes Int @default(0)
+  /// Whether this day is a working day.
+  isWorkingDay Boolean @default(true)
+
+  @@unique([scheduleId, dayOfWeek])
+  @@map("work_schedule_days")
+}
+
+/// One row per employee per working day. The unique constraint below is what
+/// makes double check-in structurally impossible.
+model Attendance {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Local calendar date of the shift (00:00 in the application timezone).
+  workDate DateTime @db.Date
+
+  checkInAt  DateTime?
+  checkOutAt DateTime?
+
+  checkInLatitude  Float?
+  checkInLongitude Float?
+  checkInDistanceM Float?
+  checkOutLatitude  Float?
+  checkOutLongitude Float?
+  checkOutDistanceM Float?
+
+  status         AttendanceStatus
+  lateMinutes    Int      @default(0)
+  /// Minutes between check-in and check-out, with no break deduction.
+  workedMinutes  Int      @default(0)
+  /// Set when check-in happened outside every configured geo-fence.
+  outsideRadius  Boolean  @default(false)
+  notes          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, workDate])
+  @@index([workDate])
+  @@index([status])
+  @@index([userId, workDate(sort: Desc)])
+  @@map("attendances")
+}
+
+/// Optional geo-fence for attendance location validation.
+model WorkLocation {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  address       String?
+  latitude      Float
+  longitude     Float
+  /// Fence radius in metres.
+  radiusMeters  Int      @default(200)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("work_locations")
+}
+
+/// Singleton row (id = 1) holding organization-wide configuration.
+model Setting {
+  id Int @id @default(1)
+
+  organizationName String @default("Universal Attendance")
+
+  /// IANA timezone name, e.g. "Asia/Jakarta".
+  timezone String @default("Asia/Jakarta")
+
+  /// Default schedule id, used when a user has no personal schedule.
+  defaultScheduleId String?
+  defaultSchedule   WorkSchedule? @relation(fields: [defaultScheduleId], references: [id], onDelete: SetNull)
+
+  /// When true, check-in requires coordinates inside an active geo-fence.
+  requireLocationValidation Boolean @default(false)
+
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+/// Append-only trail of administrative actions.
+model AuditLog {
+  id      String @id @default(cuid())
+  actorId String?
+  actor   User?  @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  action     AuditAction
+  entityType String
+  entityId   String?
+  /// Human-readable summary rendered directly in the audit table.
+  summary    String
+  metadata   Json?
+  ipAddress  String?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt(sort: Desc)])
+  @@index([action])
+  @@index([actorId])
+  @@map("audit_logs")
+}

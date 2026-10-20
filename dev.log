@@ -1,0 +1,21 @@
+
+> universal-attendance@1.0.0 dev
+> next dev
+
+▲ Next.js 16.4.0 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://100.90.161.67:3000
+- Environments: .env.local, .env
+✓ Ready in 699ms
+✓ Running next.config.ts took 53ms
+
+ GET /dashboard 200 in 4.5s (next.js: 1291ms, proxy.ts: 253ms, application-code: 2.9s)
+ GET /manifest.webmanifest 200 in 193ms (next.js: 141ms, application-code: 51ms)
+ GET /admin/reports 200 in 1425ms (next.js: 170ms, proxy.ts: 29ms, application-code: 1227ms)
+ GET /admin/overview 200 in 2.9s (next.js: 228ms, proxy.ts: 35ms, application-code: 2.6s)
+ GET /admin/employees 200 in 864ms (next.js: 146ms, proxy.ts: 12ms, application-code: 706ms)
+ GET /admin/settings 200 in 1517ms (next.js: 186ms, proxy.ts: 514ms, application-code: 818ms)
+ GET /api/server-time 200 in 80ms (next.js: 67ms, application-code: 13ms)
+ GET /dashboard 200 in 1434ms (next.js: 46ms, proxy.ts: 23ms, application-code: 1365ms)
+ GET /api/attendance/stream 200 in 2.6s (next.js: 70ms, application-code: 2.6s)
+[?25h
