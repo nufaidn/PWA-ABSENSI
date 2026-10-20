@@ -3,12 +3,6 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "env": [
-    "DATABASE_URL",
-    "DATABASE_SSL",
-    "AUTH_SECRET",
-    "SESSION_MAX_AGE"
-  ],
   "functions": {
     "api/**/*.ts": {
       "memory": 1024,
