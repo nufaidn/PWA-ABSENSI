@@ -175,7 +175,7 @@ export interface CreateEmployeeInput {
  * **A preview, not a reservation.** Two calls a moment apart both return the same
  * number when nothing has been created in between, because this only reads. That
  * is fine for showing a suggestion in the form, and the create path does not rely
- * on it � `createEmployee` allocates *inside the same locked transaction as the
+ * on it — `createEmployee` allocates *inside the same locked transaction as the
  * insert*, which is what actually makes the number exclusive.
  *
  * Returns null for roles that do not use codes (admins sign in by email).
@@ -224,7 +224,7 @@ async function nextCodeForPrefix(
  * `EMP-002` and one would still fail on the unique index. Holding the lock
  * across the insert is what turns the number into a guarantee.
  *
- * A code supplied by the admin is used as-is and never auto-corrected � if it is
+ * A code supplied by the admin is used as-is and never auto-corrected — if it is
  * taken, they should be told rather than silently given a different identity.
  */
 async function createWithAssignedCode(

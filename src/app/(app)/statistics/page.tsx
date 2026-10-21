@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { CalendarCheck2, Clock, Timer, TrendingUp } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getOwnAnalytics } from "@/lib/dal/reports";
-import { formatDuration } from "@/lib/attendance/time";
+import { formatDuration, isAttendanceRole } from "@/lib/attendance/time";
 import {
   Surface,
   SurfaceBody,
@@ -27,7 +28,9 @@ export const metadata: Metadata = {
  * widen the range of records this page can reach.
  */
 export default async function StatisticsPage() {
-  await requireUser();
+  const user = await requireUser();
+  // Personal attendance analytics do not apply to administrators.
+  if (!isAttendanceRole(user.role)) redirect("/admin/overview");
 
   const { summary, trend, range, averageWorkedMinutes } = await getOwnAnalytics();
 

@@ -40,6 +40,9 @@ function currentUserId(): string {
 }
 
 beforeEach(async () => {
+  // `seedAdmin` mutates the mocked identity's role; reset it so a test that
+  // signs in as an administrator cannot leak into the next one.
+  currentUser.role = "EMPLOYEE";
   await baseFixture();
 });
 
@@ -411,5 +414,18 @@ describe("personal schedule overrides the organization default", () => {
     // 21:00 is late for a 20:00 start but on time for the 09:00 default.
     const result = await checkIn({ now: new Date(Date.UTC(2026, 9, 13, 14, 0, 0)) });
     expect(result.status).toBe("LATE");
+  });
+});
+
+describe("administrator exemption", () => {
+  it("refuses check-in and check-out for an administrator", async () => {
+    currentUser.role = "SUPER_ADMIN";
+
+    await expect(checkIn({ now: at("08:55") })).rejects.toMatchObject({
+      code: "ADMIN_EXEMPT",
+    });
+    await expect(checkOut({ now: at("17:00") })).rejects.toMatchObject({
+      code: "ADMIN_EXEMPT",
+    });
   });
 });

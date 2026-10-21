@@ -57,10 +57,20 @@ describe("bottom tab bar", () => {
     expect(list?.style.gridTemplateColumns).toBe("repeat(3, minmax(0, 1fr))");
   });
 
-  it("matches the column count to an administrator's five tabs", () => {
+  it("matches the column count to an administrator's four tabs", () => {
     renderNav("ADMIN");
     const list = screen.getByRole("navigation", { name: "Navigasi utama" }).querySelector("ul");
-    expect(list?.style.gridTemplateColumns).toBe("repeat(5, minmax(0, 1fr))");
+    expect(list?.style.gridTemplateColumns).toBe("repeat(4, minmax(0, 1fr))");
+  });
+
+  it("keeps employee attendance tabs out of an administrator's bar", () => {
+    renderNav("ADMIN");
+    for (const label of ["Beranda", "Riwayat", "Statistik"]) {
+      expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
+    }
+    for (const label of ["Ringkasan", "Laporan", "Karyawan", "Jadwal Kerja"]) {
+      expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
+    }
   });
 
   it("shows every employee destination in the bar", () => {
@@ -184,5 +194,23 @@ describe("brand link", () => {
       "href",
       "/admin/overview",
     );
+  });
+
+  it("keeps employee attendance links out of the administrator sidebar", () => {
+    render(
+      <Sidebar
+        user={ADMIN}
+        organizationName="PT Contoh"
+        pathname="/admin/overview"
+        logoutSlot={<button type="button">Keluar</button>}
+      />,
+    );
+
+    for (const label of ["Beranda", "Riwayat", "Statistik"]) {
+      expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
+    }
+    for (const label of ["Ringkasan", "Laporan", "Karyawan", "Jadwal Kerja"]) {
+      expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
+    }
   });
 });

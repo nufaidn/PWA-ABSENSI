@@ -19,6 +19,7 @@ import {
   formatDuration,
   toLocalDateKey,
   isWorkingDay,
+  isAttendanceRole,
   type WorkScheduleTimes,
 } from "@/lib/attendance/time";
 import { summarizeStatuses, type AttendanceSummary } from "@/lib/attendance/summary";
@@ -50,11 +51,29 @@ export class AttendanceError extends Error {
       | "LOCATION_REQUIRED"
       | "NO_FENCE_CONFIGURED"
       | "NOT_A_WORKING_DAY"
-      | "NO_SCHEDULE",
+      | "NO_SCHEDULE"
+      | "ADMIN_EXEMPT",
   ) {
     super(message);
     this.name = "AttendanceError";
   }
+}
+
+/**
+ * Resolves the signed-in user and rejects roles that are exempt from
+ * attendance. Administrators manage the roster instead of clocking in, and the
+ * rule is enforced here rather than only in the navigation so a crafted Server
+ * Action call cannot create an attendance row for an admin account.
+ */
+async function assertAttendanceUser(): Promise<CurrentUser> {
+  const user = await assertUser();
+  if (!isAttendanceRole(user.role)) {
+    throw new AttendanceError(
+      "Akun administrator tidak perlu melakukan absensi.",
+      "ADMIN_EXEMPT",
+    );
+  }
+  return user;
 }
 
 export interface EffectiveScheduleWithLocation {
@@ -106,7 +125,7 @@ export interface TodaySummary {
 }
 
 export const getTodaySummary = cache(async (): Promise<TodaySummary> => {
-  const user = await assertUser();
+  const user = await assertAttendanceUser();
   const context = await getAttendanceContext(user.id);
   const now = new Date();
   const dateKey = toLocalDateKey(now, context.timezone);
@@ -155,7 +174,7 @@ export async function checkIn(input: {
   point?: GeoPoint | null;
   now?: Date;
 }): Promise<CheckInResult> {
-  const user = await assertUser();
+  const user = await assertAttendanceUser();
   const context = await getAttendanceContext(user.id);
 
   const now = input.now ?? new Date();
@@ -271,7 +290,7 @@ export async function checkOut(
     now?: Date;
   } = {},
 ): Promise<CheckOutResult> {
-  const user = await assertUser();
+  const user = await assertAttendanceUser();
   const context = await getAttendanceContext(user.id);
 
   const now = input.now ?? new Date();
@@ -389,7 +408,7 @@ export async function getOwnHistory(options: {
   to?: string;
   status?: AttendanceStatus | "ALL";
 }): Promise<HistoryPage> {
-  const user = await assertUser();
+  const user = await assertAttendanceUser();
   const context = await getAttendanceContext(user.id);
 
   const page = Math.max(1, options.page ?? 1);

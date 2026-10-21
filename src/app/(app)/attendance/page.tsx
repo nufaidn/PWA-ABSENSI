@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { CalendarX2, Clock, MapPin, TrendingUp } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getOwnHistory } from "@/lib/dal/attendance";
 import { AttendanceStatus } from "@/generated/prisma/enums";
-import { formatDuration, STATUS_DESCRIPTOR } from "@/lib/attendance/time";
+import { formatDuration, isAttendanceRole, STATUS_DESCRIPTOR } from "@/lib/attendance/time";
 import { AttendanceFilters } from "@/components/attendance/attendance-filters";
 import { Pagination } from "@/components/attendance/pagination";
 import {
@@ -48,7 +49,10 @@ export default async function AttendanceHistoryPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const user = await requireUser();
+  // Administrators have no attendance history of their own to show.
+  if (!isAttendanceRole(user.role)) redirect("/admin/overview");
+
   const params = (await searchParams) ?? {};
 
   const status = parseStatus(params.status);

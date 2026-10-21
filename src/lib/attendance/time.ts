@@ -294,6 +294,21 @@ export const ROLE_LABEL: Record<Role, string> = {
 /** Roles that sign in through the employee form and need an employee code. */
 export const SELF_SERVICE_ROLES: readonly Role[] = ["EMPLOYEE", "INTERN"];
 
+/**
+ * Roles that are expected to record attendance.
+ *
+ * Administrators manage the system instead of clocking in, so they are
+ * deliberately excluded. This happens to match `SELF_SERVICE_ROLES` today, but
+ * the two answer different questions and are kept separate so a future role
+ * can gain one without silently gaining the other.
+ */
+export const ATTENDANCE_ROLES: readonly Role[] = ["EMPLOYEE", "INTERN"];
+
+/** True when the role is expected to check in and out. */
+export function isAttendanceRole(role: Role): boolean {
+  return ATTENDANCE_ROLES.includes(role);
+}
+
 /** True when `role` is at least as privileged as `required`. */
 export function hasRole(role: Role, required: Role): boolean {
   return ROLE_RANK[role] >= ROLE_RANK[required];

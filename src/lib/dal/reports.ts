@@ -3,7 +3,7 @@ import { cache } from "react";
 import type { AttendanceStatus } from "@/generated/prisma/enums";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { assertRole, assertUser } from "./auth";
+import { assertRole, assertUser, ForbiddenError } from "./auth";
 import { getLocationPolicy } from "./settings";
 import {
   accumulateStatus,
@@ -15,7 +15,11 @@ import {
   type AttendanceSummary,
   type DailyTrendPoint,
 } from "@/lib/attendance/summary";
-import { dateKeyToDbDate } from "@/lib/attendance/time";
+import {
+  ATTENDANCE_ROLES,
+  dateKeyToDbDate,
+  isAttendanceRole,
+} from "@/lib/attendance/time";
 
 /**
  * Report Data Access Layer.
@@ -108,7 +112,11 @@ function buildWhere(filters: ReportFilters, range: ResolvedReportRange): Prisma.
     where.userId = filters.userId;
   }
 
-  const userFilter: Prisma.UserWhereInput = {};
+  // Reports describe the people who actually record attendance. Administrators
+  // are exempt, so their (historical) rows must not leak into totals or CSV.
+  const userFilter: Prisma.UserWhereInput = {
+    role: { in: [...ATTENDANCE_ROLES] },
+  };
   if (filters.department) {
     userFilter.department = filters.department;
   }
@@ -396,18 +404,26 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: policy.timezone }).format(new Date());
   const today = dateFromKey(todayKey);
   const range = resolveReportRange(shiftDateKey(todayKey, -29), todayKey, todayKey);
+  // Administrators are not part of the attendance population.
+  const attendanceUserWhere: Prisma.UserWhereInput = {
+    role: { in: [...ATTENDANCE_ROLES] },
+  };
 
   const [employees, activeEmployees, todayGroups, recentActivity, monthGroups, monthSum] =
     await Promise.all([
-      db.user.count(),
-      db.user.count({ where: { isActive: true } }),
+      db.user.count({ where: attendanceUserWhere }),
+      db.user.count({ where: { ...attendanceUserWhere, isActive: true } }),
       db.attendance.groupBy({
         by: ["status"],
-        where: { workDate: { gte: today, lte: today } },
+        where: { workDate: { gte: today, lte: today }, user: attendanceUserWhere },
         _count: { _all: true },
       }),
       db.attendance.findMany({
-        where: { workDate: { gte: today, lte: today }, checkInAt: { not: null } },
+        where: {
+          workDate: { gte: today, lte: today },
+          checkInAt: { not: null },
+          user: attendanceUserWhere,
+        },
         orderBy: { checkInAt: "desc" },
         take: 8,
         select: {
@@ -420,11 +436,11 @@ export async function getAdminOverview(): Promise<AdminOverview> {
       }),
       db.attendance.groupBy({
         by: ["status"],
-        where: { workDate: { gte: range.from, lte: range.to } },
+        where: { workDate: { gte: range.from, lte: range.to }, user: attendanceUserWhere },
         _count: { _all: true },
       }),
       db.attendance.aggregate({
-        where: { workDate: { gte: range.from, lte: range.to } },
+        where: { workDate: { gte: range.from, lte: range.to }, user: attendanceUserWhere },
         _sum: { workedMinutes: true },
       }),
     ]);
@@ -468,6 +484,10 @@ export async function getOwnAnalytics(): Promise<{
   range: ResolvedReportRange;
 }> {
   const user = await assertUser();
+  if (!isAttendanceRole(user.role)) {
+    throw new ForbiddenError("Administrator tidak memiliki data absensi.");
+  }
+
   const policy = await getLocationPolicy();
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: policy.timezone }).format(new Date());
   const range = resolveReportRange(shiftDateKey(todayKey, -29), todayKey, todayKey);
@@ -500,7 +520,10 @@ export async function getOwnAnalytics(): Promise<{
 /** Distinct departments, for the report filter dropdown. */
 export const getDepartments = cache(async (): Promise<string[]> => {
   const rows = await db.user.findMany({
-    where: { department: { not: null } },
+    where: {
+      department: { not: null },
+      role: { in: [...ATTENDANCE_ROLES] },
+    },
     distinct: ["department"],
     select: { department: true },
     orderBy: { department: "asc" },

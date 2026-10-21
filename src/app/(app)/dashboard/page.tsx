@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal/auth";
 import { getTodaySummary } from "@/lib/dal/attendance";
-import { formatShortDate } from "@/lib/attendance/time";
+import { formatShortDate, isAttendanceRole } from "@/lib/attendance/time";
 import { AttendanceCard } from "@/components/attendance/attendance-card";
 
 export const metadata: Metadata = {
@@ -23,6 +24,9 @@ export const metadata: Metadata = {
  */
 export default async function DashboardPage() {
   const user = await requireUser();
+  // Administrators manage attendance instead of recording it.
+  if (!isAttendanceRole(user.role)) redirect("/admin/overview");
+
   const today = await getTodaySummary();
 
   const { attendance, schedule, timezone } = today;

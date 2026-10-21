@@ -152,7 +152,9 @@ export function Sidebar({
   logoutSlot: React.ReactNode;
 }) {
   const isAdmin = RANK[user.role] >= RANK.ADMIN;
-  const nav = isAdmin ? [...ADMIN_NAV, ...EMPLOYEE_NAV] : EMPLOYEE_NAV;
+  // Administrators do not record attendance, so the employee destinations
+  // (check-in, history, personal statistics) are deliberately absent here.
+  const nav = isAdmin ? ADMIN_NAV : EMPLOYEE_NAV;
 
   return (
     <aside className="sticky top-0 hidden h-dvh w-[264px] shrink-0 flex-col border-r border-border bg-card lg:flex">
@@ -165,15 +167,6 @@ export function Sidebar({
           {isAdmin ? "Administrasi" : "Menu"}
         </p>
         <NavLinks items={nav} pathname={pathname} />
-
-        {isAdmin ? (
-          <>
-            <p className="px-3 pb-2 pt-5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Akun Saya
-            </p>
-            <NavLinks items={EMPLOYEE_NAV} pathname={pathname} />
-          </>
-        ) : null}
       </div>
 
       <div className="border-t border-border px-3 py-3">
@@ -218,13 +211,11 @@ export function MobileNav({
   const livePathname = usePathname();
   const isAdmin = RANK[user.role] >= RANK.ADMIN;
 
-  const primary: NavItem[] = isAdmin
-    ? [ADMIN_NAV[0], ADMIN_NAV[1], ADMIN_NAV[2], EMPLOYEE_NAV[0], EMPLOYEE_NAV[1]]
-    : EMPLOYEE_NAV;
+  // Four admin destinations fit comfortably in the bottom bar; settings and
+  // the audit log live behind the overflow menu.
+  const primary: NavItem[] = isAdmin ? ADMIN_NAV.slice(0, 4) : EMPLOYEE_NAV;
 
-  const overflow: NavItem[] = isAdmin
-    ? [...ADMIN_NAV.slice(3), ...EMPLOYEE_NAV.slice(2)]
-    : EMPLOYEE_NAV.slice(2);
+  const overflow: NavItem[] = isAdmin ? ADMIN_NAV.slice(4) : EMPLOYEE_NAV.slice(2);
 
   /**
    * Records which route the menu was opened on, not a plain boolean.
