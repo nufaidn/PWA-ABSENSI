@@ -256,17 +256,18 @@ async function main() {
   // --- Schedules ---------------------------------------------------------
   const schedules = new Map();
   for (const definition of SCHEDULES) {
+    // `isDefault` is a seed-only flag: the database column is called
+    // `isOrganizationDefault`, so it must not be forwarded to Prisma.
+    const { isDefault, ...fields } = definition;
     const schedule = await db.workSchedule.upsert({
       where: { name: definition.name },
       create: {
-        ...definition,
-        isOrganizationDefault: definition.isDefault,
+        ...fields,
+        isOrganizationDefault: isDefault,
       },
       update: {
-        startTime: definition.startTime,
-        endTime: definition.endTime,
-        lateToleranceMinutes: definition.lateToleranceMinutes,
-        breakMinutes: definition.breakMinutes,
+        ...fields,
+        isOrganizationDefault: isDefault,
         isActive: true,
       },
     });
