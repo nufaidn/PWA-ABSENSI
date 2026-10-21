@@ -20,8 +20,14 @@ akses data; browser tidak pernah memegang kredensial database.
 
 - Node.js 22+
 - Project Firebase dengan Cloud Firestore aktif
-- Service account Firebase (Project settings → Service accounts)
+- Service account Firebase (Project settings → Service accounts) dengan role
+  `roles/datastore.user`
 - Untuk integration test: Firebase CLI dan Java (Firestore Emulator)
+
+> **npm, bukan CDN.** Aplikasi memakai **Firebase Admin SDK** (`firebase-admin`)
+> yang di-install lewat npm dan hanya berjalan di server. Client SDK (`firebase`)
+> sengaja tidak dipakai: `firestore.rules` menolak semua akses klien dan
+> browser tidak pernah bicara langsung ke Firestore.
 
 ## Setup lokal
 
@@ -74,6 +80,11 @@ akses data; browser tidak pernah memegang kredensial database.
 | `npm run db:purge-reference -- --apply` | Hapus jadwal & lokasi demo. |
 | `npm run db:reset -- --apply` | Kosongkan seluruh data aplikasi. |
 
+> **PowerShell:** `npm run <script> -- --flag` tidak meneruskan flag di
+> PowerShell 5.1 (bash, cmd, dan zsh meneruskannya). Pakai
+> `npm run <script> --% -- --apply`, atau panggil script-nya langsung:
+> `npx tsx scripts/migrate-postgres-to-firestore.ts --apply`.
+
 ## Deploy ke Vercel
 
 Project Vercel: `pwa-absensi` (`https://pwa-absensi-azure.vercel.app`).
@@ -89,6 +100,21 @@ Tambahkan environment berikut di Vercel (Production dan Preview):
 `DATABASE_URL` dan `DATABASE_SSL` tidak lagi dipakai runtime. Setelah env diisi,
 deploy seperti biasa. `firestore.rules` menolak semua akses klien; Admin SDK
 tetap bekerja karena berjalan di server.
+
+Rules ikut ter-deploy dari repo:
+
+```bash
+firebase deploy --only firestore:rules --project <project-id>
+```
+
+## Project Firebase
+
+| | Nilai |
+| --- | --- |
+| Project ID | `absensi-by-pwa` |
+| Region database | `asia-southeast2` (Jakarta) |
+| Delete protection | aktif |
+| Service account | `firebase-adminsdk-fbsvc@absensi-by-pwa.iam.gserviceaccount.com` (role `roles/datastore.user`) |
 
 ## Migrasi dari PostgreSQL/Supabase
 
