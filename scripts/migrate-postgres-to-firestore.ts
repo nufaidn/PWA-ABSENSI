@@ -17,6 +17,7 @@
  */
 import "dotenv/config";
 import pg from "pg";
+import { getApps } from "firebase-admin/app";
 import { firestore } from "../src/lib/firebase-config";
 import { parseEmployeeCode } from "../src/lib/attendance/employee-code";
 
@@ -284,7 +285,11 @@ async function main(): Promise<void> {
     console.log("Run `npm run db:check` to verify the target, then deploy the new app.");
   } finally {
     await client.end().catch(() => {});
-    await firestore.terminate().catch(() => {});
+    // A dry run never touches Firestore, so terminating would initialize a
+    // client just to shut it down — and fail if no service account is present.
+    if (getApps().length > 0) {
+      await firestore.terminate().catch(() => {});
+    }
   }
 }
 
