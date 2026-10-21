@@ -15,7 +15,7 @@ const buttonVariants = cva(
    not duplicated in the hover state.
 */
         default:
-          "brand-gradient bg-clip-text text-white shadow-sm shadow-primary/30 hover:brightness-95 active:brightness-90",
+          "brand-gradient text-white shadow-sm shadow-primary/30 hover:brightness-95 active:brightness-90",
         outline:
           "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
         secondary:
