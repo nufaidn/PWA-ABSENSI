@@ -36,6 +36,11 @@ export const db = new PrismaClient({
     {
       connectionString: testDatabaseUrl(),
       ssl: sslFor(),
+      // Vitest runs the integration files in parallel. The `pg` default of 10
+      // clients per file multiplied by three files is enough to exhaust
+      // Supabase's 15-client session pooler, so each suite gets a small pool.
+      max: 2,
+      connectionTimeoutMillis: 10_000,
     },
     { schema: TEST_SCHEMA },
   ),
