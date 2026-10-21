@@ -20,7 +20,7 @@ import { StatusBadge } from "@/components/layout/badges";
 import { formatDuration } from "@/lib/attendance/time";
 import { STATUS_DESCRIPTOR } from "@/lib/attendance/time";
 import { useServerClock } from "@/lib/attendance/use-server-clock";
-import type { AttendanceStatus } from "@/generated/prisma/enums";
+import type { AttendanceStatus } from "@/lib/domain";
 
 /**
  * The check-in / check-out control.

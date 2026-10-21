@@ -15,7 +15,7 @@ import {
 } from "@/components/layout/primitives";
 import { ProgressMeter } from "@/components/layout/badges";
 import { AttendanceTrendChart, StatusDistributionChart } from "@/components/attendance/charts";
-import type { AttendanceStatus } from "@/generated/prisma/enums";
+import type { AttendanceStatus } from "@/lib/domain";
 
 export const metadata: Metadata = {
   title: "Statistik",

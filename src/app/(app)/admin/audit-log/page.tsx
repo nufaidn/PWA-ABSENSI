@@ -4,7 +4,7 @@ import { ScrollText, X } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { AUDIT_ACTION_LABEL, getAuditLog } from "@/lib/dal/audit";
 import { getLocationPolicy } from "@/lib/dal/settings";
-import { AuditAction } from "@/generated/prisma/enums";
+import { AuditAction } from "@/lib/domain";
 import { hasRole } from "@/lib/attendance/time";
 import {
   Surface,

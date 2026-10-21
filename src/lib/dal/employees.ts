@@ -1,8 +1,15 @@
 import "server-only";
 import { cache } from "react";
 import bcrypt from "bcryptjs";
-import type { Prisma, Role, User } from "@/generated/prisma/client";
-import { db } from "@/lib/db";
+import type { Transaction } from "firebase-admin/firestore";
+import type { Role, User } from "@/lib/domain";
+import {
+  COLLECTIONS,
+  SETTINGS_DOC_ID,
+  firestore,
+  toUser,
+  toWorkSchedule,
+} from "@/lib/db";
 import { ForbiddenError, NotFoundError, assertRole, assertUser } from "./auth";
 import { recordAudit } from "./audit";
 import { hasRole } from "@/lib/attendance/time";
@@ -11,6 +18,7 @@ import {
   formatEmployeeCode,
   highestSequence,
   nextSequence,
+  parseEmployeeCode,
   type CodedPrefix,
 } from "@/lib/attendance/employee-code";
 import type { ScheduleWithUsage } from "./settings";
@@ -21,12 +29,48 @@ import type { ScheduleWithUsage } from "./settings";
  * Two invariants are enforced here rather than in the UI:
  *   1. An administrator can never escalate a user above their own rank.
  *   2. The last remaining super admin cannot be demoted or removed.
+ *
+ * Firestore has no unique indexes, so email and employee-code uniqueness live in
+ * dedicated documents (`userEmails/{email}` and `employeeCodes/{code}`) written
+ * in the same transaction as the user. The attendance document id
+ * (`${userId}_${workDate}`) gives the same guarantee for one-record-per-day.
  */
 
 const BCRYPT_ROUNDS = 12;
 
+const users = () => firestore.collection(COLLECTIONS.users);
+const employeeCodes = () => firestore.collection(COLLECTIONS.employeeCodes);
+const userEmails = () => firestore.collection(COLLECTIONS.userEmails);
+const counters = () => firestore.collection(COLLECTIONS.counters);
+const schedules = () => firestore.collection(COLLECTIONS.schedules);
+
+class DuplicateEmployeeError extends Error {
+  constructor(message = "Email atau kode karyawan sudah digunakan.") {
+    super(message);
+    this.name = "DuplicateEmployeeError";
+  }
+}
+
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, BCRYPT_ROUNDS);
+}
+
+function normalizeEmail(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+async function getUserById(id: string): Promise<User | null> {
+  const snapshot = await users().doc(id).get();
+  return snapshot.exists ? toUser(snapshot.id, snapshot.data() ?? {}) : null;
+}
+
+async function findUserByField(
+  field: "email" | "employeeCode",
+  value: string,
+): Promise<User | null> {
+  const snapshot = await users().where(field, "==", value).limit(1).get();
+  const doc = snapshot.docs[0];
+  return doc ? toUser(doc.id, doc.data()) : null;
 }
 
 /**
@@ -35,19 +79,18 @@ export async function hashPassword(plain: string): Promise<string> {
  *
  * Employees sign in with their `employeeCode`, because that is what they are
  * given on their joining paperwork. Email is accepted as a fallback so someone
- * who does not remember the format can still get in; both columns are unique, so
- * a single lookup per candidate is enough.
+ * who does not remember the format can still get in.
  */
 export async function verifyCredentials(
   identifier: string,
   password: string,
 ): Promise<User | null> {
   const value = identifier.trim();
-  const normalized = value.toLowerCase();
+  const normalized = normalizeEmail(value);
 
   const user =
-    (await db.user.findUnique({ where: { employeeCode: value } })) ??
-    (await db.user.findUnique({ where: { email: normalized } }));
+    (await findUserByField("employeeCode", value)) ??
+    (await findUserByField("email", normalized));
 
   if (!user) {
     // Hash a dummy value so a missing account costs the same time as a wrong
@@ -95,67 +138,86 @@ export interface EmployeeListItem {
   schedule: { id: string; name: string } | null;
 }
 
+async function scheduleNameMap(): Promise<Map<string, string>> {
+  const snapshot = await schedules().get();
+  return new Map(
+    snapshot.docs.map((doc) => [
+      doc.id,
+      typeof doc.data().name === "string" ? doc.data().name : "",
+    ]),
+  );
+}
+
 export const getEmployees = cache(
-  async (options: { search?: string; department?: string; role?: Role | "ALL"; active?: "ALL" | "active" | "inactive" } = {}): Promise<EmployeeListItem[]> => {
+  async (
+    options: {
+      search?: string;
+      department?: string;
+      role?: Role | "ALL";
+      active?: "ALL" | "active" | "inactive";
+    } = {},
+  ): Promise<EmployeeListItem[]> => {
     await assertRole("ADMIN");
 
-    const where: Prisma.UserWhereInput = {
-      ...(options.search
-        ? {
-            OR: [
-              { name: { contains: options.search, mode: "insensitive" } },
-              { email: { contains: options.search, mode: "insensitive" } },
-              { employeeCode: { contains: options.search, mode: "insensitive" } },
-            ],
-          }
-        : {}),
-      ...(options.department ? { department: options.department } : {}),
-      ...(options.role && options.role !== "ALL" ? { role: options.role } : {}),
-      ...(options.active === "active"
-        ? { isActive: true }
-        : options.active === "inactive"
-          ? { isActive: false }
-          : {}),
-    };
+    const [snapshot, scheduleNames] = await Promise.all([
+      users().get(),
+      scheduleNameMap(),
+    ]);
 
-    return db.user.findMany({
-      where,
-      orderBy: [{ isActive: "desc" }, { name: "asc" }],
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        employeeCode: true,
-        role: true,
-        department: true,
-        phone: true,
-        isActive: true,
-        createdAt: true,
-        schedule: { select: { id: true, name: true } },
-      },
-    });
+    const search = options.search?.trim().toLowerCase();
+    return snapshot.docs
+      .map((doc) => toUser(doc.id, doc.data()))
+      .filter((user) => {
+        if (options.department && user.department !== options.department) return false;
+        if (options.role && options.role !== "ALL" && user.role !== options.role) return false;
+        if (options.active === "active" && !user.isActive) return false;
+        if (options.active === "inactive" && user.isActive) return false;
+        if (!search) return true;
+        return (
+          user.name.toLowerCase().includes(search) ||
+          user.email.toLowerCase().includes(search) ||
+          (user.employeeCode?.toLowerCase().includes(search) ?? false)
+        );
+      })
+      .sort((a, b) => {
+        if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+        return a.name.localeCompare(b.name, "id");
+      })
+      .map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        employeeCode: user.employeeCode,
+        role: user.role,
+        department: user.department,
+        phone: user.phone,
+        isActive: user.isActive,
+        createdAt: user.createdAt,
+        schedule: user.scheduleId
+          ? { id: user.scheduleId, name: scheduleNames.get(user.scheduleId) ?? "—" }
+          : null,
+      }));
   },
 );
 
 export async function getEmployee(id: string): Promise<EmployeeListItem> {
   await assertRole("ADMIN");
-  const employee = await db.user.findUnique({
-    where: { id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      employeeCode: true,
-      role: true,
-      department: true,
-      phone: true,
-      isActive: true,
-      createdAt: true,
-      schedule: { select: { id: true, name: true } },
-    },
-  });
-  if (!employee) throw new NotFoundError("Karyawan tidak ditemukan.");
-  return employee;
+  const [user, scheduleNames] = await Promise.all([getUserById(id), scheduleNameMap()]);
+  if (!user) throw new NotFoundError("Karyawan tidak ditemukan.");
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    employeeCode: user.employeeCode,
+    role: user.role,
+    department: user.department,
+    phone: user.phone,
+    isActive: user.isActive,
+    createdAt: user.createdAt,
+    schedule: user.scheduleId
+      ? { id: user.scheduleId, name: scheduleNames.get(user.scheduleId) ?? "—" }
+      : null,
+  };
 }
 
 export interface CreateEmployeeInput {
@@ -169,80 +231,66 @@ export interface CreateEmployeeInput {
   scheduleId?: string | null;
 }
 
+function codesForPrefix(snapshotCodes: readonly string[], prefix: CodedPrefix): Set<number> {
+  const taken = new Set<number>();
+  for (const code of snapshotCodes) {
+    const parsed = parseEmployeeCode(code);
+    if (parsed?.prefix === prefix) taken.add(parsed.sequence);
+  }
+  return taken;
+}
+
 /**
  * Suggests the next employee code for a role's track.
  *
  * **A preview, not a reservation.** Two calls a moment apart both return the same
  * number when nothing has been created in between, because this only reads. That
- * is fine for showing a suggestion in the form, and the create path does not rely
- * on it — `createEmployee` allocates *inside the same locked transaction as the
- * insert*, which is what actually makes the number exclusive.
- *
- * Returns null for roles that do not use codes (admins sign in by email).
+ * is fine for showing a suggestion in the form; `createEmployee` allocates
+ * inside the same transaction as the insert.
  */
 export async function allocateEmployeeCode(role: Role): Promise<string | null> {
   const prefix = codePrefixForRole(role);
   if (!prefix) return null;
-  return nextCodeForPrefix(prefix);
-}
 
-/**
- * Takes the code-allocation advisory lock for `prefix`.
- *
- * Transaction-scoped, so PostgreSQL releases it on commit *and* on an exception,
- * where no cleanup call would run. `hashtext` derives a stable key from the
- * string. The key is per-prefix: allocating an `INT` code does not block an
- * `EMP` one.
- *
- * `$executeRawUnsafe` rather than `$queryRaw`: the lock function returns `void`,
- * which Prisma cannot deserialise, and nothing here needs the result.
- */
-async function lockCodePrefix(tx: Prisma.TransactionClient, prefix: CodedPrefix): Promise<void> {
-  await tx.$executeRawUnsafe(`select pg_advisory_xact_lock(hashtext($1))`, `uas-code-${prefix}`);
-}
-
-/** The next free number for a track, given whatever the caller can already see. */
-async function nextCodeForPrefix(
-  prefix: CodedPrefix,
-  client: Pick<Prisma.TransactionClient, "user"> = db,
-): Promise<string> {
-  const taken = await client.user.findMany({
-    where: { employeeCode: { startsWith: `${prefix}-` } },
-    select: { employeeCode: true },
-  });
-  const codes = taken.map((row) => row.employeeCode).filter((code): code is string => code !== null);
+  const snapshot = await users()
+    .where("employeeCode", ">=", `${prefix}-`)
+    .where("employeeCode", "<", `${prefix}-\uf8ff`)
+    .get();
+  const codes = snapshot.docs
+    .map((doc) => doc.data().employeeCode)
+    .filter((code): code is string => typeof code === "string");
   const highest = highestSequence(codes, prefix);
-  return formatEmployeeCode(prefix, nextSequence(new Set(), highest));
+  return formatEmployeeCode(prefix, nextSequence(codesForPrefix(codes, prefix), highest));
 }
 
-/**
- * Creates the employee, assigning the code inside the insert's own transaction.
- *
- * The read and the write share one transaction under the prefix lock. A separate
- * "allocate, then insert" pair cannot work: the advisory lock would serialise the
- * two reads but reserve nothing, so two administrators would both compute
- * `EMP-002` and one would still fail on the unique index. Holding the lock
- * across the insert is what turns the number into a guarantee.
- *
- * A code supplied by the admin is used as-is and never auto-corrected — if it is
- * taken, they should be told rather than silently given a different identity.
- */
-async function createWithAssignedCode(
-  build: (tx: Prisma.TransactionClient, employeeCode: string | null) => Promise<User>,
-  role: Role,
-  explicitCode: string | null,
-): Promise<User> {
-  const prefix = codePrefixForRole(role);
+async function allocateInsideTransaction(
+  tx: Transaction,
+  prefix: CodedPrefix,
+): Promise<string> {
+  const counterRef = counters().doc(prefix);
+  const counterSnapshot = await tx.get(counterRef);
+  const codeSnapshot = await tx.get(
+    users()
+      .where("employeeCode", ">=", `${prefix}-`)
+      .where("employeeCode", "<", `${prefix}-\uf8ff`),
+  );
 
-  if (explicitCode || !prefix) {
-    return build(db, explicitCode);
+  const codes = codeSnapshot.docs
+    .map((doc) => doc.data().employeeCode)
+    .filter((code): code is string => typeof code === "string");
+  const taken = codesForPrefix(codes, prefix);
+  const counterValue =
+    typeof counterSnapshot.data()?.value === "number" ? counterSnapshot.data()!.value : 0;
+  const highest = Math.max(highestSequence(codes, prefix), counterValue);
+
+  let candidate = nextSequence(taken, highest);
+  // A uniqueness document is authoritative even if a user document was removed
+  // without cleaning it up. Read before writing, as Firestore requires.
+  while ((await tx.get(employeeCodes().doc(formatEmployeeCode(prefix, candidate)))).exists) {
+    candidate += 1;
   }
 
-  return db.$transaction(async (tx) => {
-    await lockCodePrefix(tx, prefix);
-    const code = await nextCodeForPrefix(prefix, tx);
-    return build(tx, code);
-  });
+  return formatEmployeeCode(prefix, candidate);
 }
 
 export async function createEmployee(input: CreateEmployeeInput): Promise<User> {
@@ -252,32 +300,65 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<User> 
     throw new ForbiddenError("Anda tidak dapat membuat akun dengan role di atas akun Anda.");
   }
 
-  const email = input.email.trim().toLowerCase();
+  const email = normalizeEmail(input.email);
   const passwordHash = await hashPassword(input.password);
-
-  // An explicit code from the form always wins; a blank one is generated inside
-  // the insert's transaction.
   const explicitCode = input.employeeCode?.trim() || null;
+  const prefix = codePrefixForRole(input.role);
+  const userId = crypto.randomUUID();
+  const now = new Date();
 
-  const persist = async (
-    tx: Prisma.TransactionClient,
-    generatedCode: string | null,
-  ): Promise<User> =>
-    tx.user.create({
-      data: {
-        name: input.name.trim(),
+  try {
+    const created = await firestore.runTransaction(async (tx) => {
+      const emailRef = userEmails().doc(email);
+      const emailSnapshot = await tx.get(emailRef);
+      if (emailSnapshot.exists) throw new DuplicateEmployeeError();
+
+      let employeeCode = explicitCode;
+      if (employeeCode) {
+        const codeSnapshot = await tx.get(employeeCodes().doc(employeeCode));
+        if (codeSnapshot.exists) throw new DuplicateEmployeeError();
+      } else if (prefix) {
+        employeeCode = await allocateInsideTransaction(tx, prefix);
+      }
+
+      // Keep the counter monotonic even when an administrator supplies an
+      // explicit code below the current high-water mark. Reusing a number that
+      // was already issued would make an old code point at a new person.
+      let counterValue = 0;
+      if (prefix && employeeCode) {
+        const counterSnapshot = await tx.get(counters().doc(prefix));
+        const current =
+          typeof counterSnapshot.data()?.value === "number"
+            ? counterSnapshot.data()!.value
+            : 0;
+        counterValue = Math.max(parseEmployeeCode(employeeCode)?.sequence ?? 0, current);
+      }
+
+      const data = {
         email,
         passwordHash,
-        employeeCode: explicitCode ?? generatedCode,
+        name: input.name.trim(),
+        employeeCode,
         role: input.role,
         department: input.department?.trim() || null,
         phone: input.phone?.trim() || null,
+        isActive: true,
         scheduleId: input.scheduleId || null,
-      },
-    });
+        createdAt: now,
+        updatedAt: now,
+      };
 
-  try {
-    const created = await createWithAssignedCode(persist, input.role, explicitCode);
+      tx.set(users().doc(userId), data);
+      tx.set(emailRef, { userId });
+      if (employeeCode) {
+        tx.set(employeeCodes().doc(employeeCode), { userId });
+        if (prefix && counterValue > 0) {
+          tx.set(counters().doc(prefix), { value: counterValue }, { merge: true });
+        }
+      }
+
+      return toUser(userId, data);
+    });
 
     await recordAudit({
       actorId: actor.id,
@@ -294,7 +375,8 @@ export async function createEmployee(input: CreateEmployeeInput): Promise<User> 
 
     return created;
   } catch (error) {
-    throw translateUniqueError(error, "Email atau kode karyawan sudah digunakan.");
+    if (error instanceof DuplicateEmployeeError) throw error;
+    throw error instanceof Error ? error : new Error("Terjadi kesalahan tak terduga.");
   }
 }
 
@@ -310,7 +392,7 @@ export interface UpdateEmployeeInput {
 
 export async function updateEmployee(id: string, input: UpdateEmployeeInput): Promise<User> {
   const actor = await assertRole("ADMIN");
-  const existing = await db.user.findUnique({ where: { id } });
+  const existing = await getUserById(id);
   if (!existing) throw new NotFoundError("Karyawan tidak ditemukan.");
 
   if (input.role && !hasRole(actor.role, input.role)) {
@@ -320,25 +402,61 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
     await assertNotLastSuperAdmin(id);
   }
 
+  const nextEmail =
+    input.email !== undefined ? normalizeEmail(input.email) : existing.email;
+  const nextCode =
+    input.employeeCode !== undefined
+      ? input.employeeCode?.trim() || null
+      : existing.employeeCode;
+
   try {
-    const updated = await db.user.update({
-      where: { id },
-      data: {
+    const updated = await firestore.runTransaction(async (tx) => {
+      const userRef = users().doc(id);
+      const userSnapshot = await tx.get(userRef);
+      if (!userSnapshot.exists) throw new NotFoundError("Karyawan tidak ditemukan.");
+
+      if (nextEmail !== existing.email) {
+        const emailSnapshot = await tx.get(userEmails().doc(nextEmail));
+        if (emailSnapshot.exists) throw new DuplicateEmployeeError();
+      }
+      if (nextCode && nextCode !== existing.employeeCode) {
+        const codeSnapshot = await tx.get(employeeCodes().doc(nextCode));
+        if (codeSnapshot.exists) throw new DuplicateEmployeeError();
+      }
+
+      const data = {
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
-        ...(input.email !== undefined ? { email: input.email.trim().toLowerCase() } : {}),
-        ...(input.employeeCode !== undefined
-          ? { employeeCode: input.employeeCode?.trim() || null }
+        ...(input.email !== undefined ? { email: nextEmail } : {}),
+        ...(input.employeeCode !== undefined ? { employeeCode: nextCode } : {}),
+        ...(input.department !== undefined
+          ? { department: input.department?.trim() || null }
           : {}),
-        ...(input.department !== undefined ? { department: input.department?.trim() || null } : {}),
         ...(input.phone !== undefined ? { phone: input.phone?.trim() || null } : {}),
         ...(input.scheduleId !== undefined ? { scheduleId: input.scheduleId || null } : {}),
         ...(input.role !== undefined ? { role: input.role } : {}),
-      },
+        updatedAt: new Date(),
+      };
+
+      tx.update(userRef, data);
+
+      if (nextEmail !== existing.email) {
+        tx.delete(userEmails().doc(existing.email));
+        tx.set(userEmails().doc(nextEmail), { userId: id });
+      }
+      if (nextCode !== existing.employeeCode) {
+        if (existing.employeeCode) tx.delete(employeeCodes().doc(existing.employeeCode));
+        if (nextCode) tx.set(employeeCodes().doc(nextCode), { userId: id });
+      }
+
+      return toUser(id, { ...existing, ...data });
     });
 
     await recordAudit({
       actorId: actor.id,
-      action: input.role && input.role !== existing.role ? "EMPLOYEE_ROLE_CHANGED" : "EMPLOYEE_UPDATED",
+      action:
+        input.role && input.role !== existing.role
+          ? "EMPLOYEE_ROLE_CHANGED"
+          : "EMPLOYEE_UPDATED",
       entityType: "User",
       entityId: id,
       summary:
@@ -350,13 +468,14 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
 
     return updated;
   } catch (error) {
-    throw translateUniqueError(error, "Email atau kode karyawan sudah digunakan.");
+    if (error instanceof DuplicateEmployeeError) throw error;
+    throw error instanceof Error ? error : new Error("Terjadi kesalahan tak terduga.");
   }
 }
 
 export async function setEmployeeActive(id: string, isActive: boolean): Promise<void> {
   const actor = await assertRole("ADMIN");
-  const existing = await db.user.findUnique({ where: { id } });
+  const existing = await getUserById(id);
   if (!existing) throw new NotFoundError("Karyawan tidak ditemukan.");
 
   // Without this guard an admin could lock every administrator out of the app.
@@ -364,7 +483,7 @@ export async function setEmployeeActive(id: string, isActive: boolean): Promise<
     await assertNotLastSuperAdmin(id);
   }
 
-  await db.user.update({ where: { id }, data: { isActive } });
+  await users().doc(id).update({ isActive, updatedAt: new Date() });
 
   await recordAudit({
     actorId: actor.id,
@@ -381,14 +500,31 @@ export async function deleteEmployee(id: string): Promise<void> {
     throw new ForbiddenError("Anda tidak dapat menghapus akun Anda sendiri.");
   }
 
-  const existing = await db.user.findUnique({ where: { id } });
+  const existing = await getUserById(id);
   if (!existing) throw new NotFoundError("Karyawan tidak ditemukan.");
   if (existing.role === "SUPER_ADMIN") {
     await assertNotLastSuperAdmin(id);
   }
 
-  // Cascades to Attendance via the schema's onDelete rule.
-  await db.user.delete({ where: { id } });
+  // Firestore has no cascading delete. Attendance rows are removed first so a
+  // failure leaves the account (and its login) intact rather than orphaning rows.
+  const attendance = await firestore
+    .collection(COLLECTIONS.attendance)
+    .where("userId", "==", id)
+    .get();
+  for (let offset = 0; offset < attendance.docs.length; offset += 400) {
+    const batch = firestore.batch();
+    for (const doc of attendance.docs.slice(offset, offset + 400)) {
+      batch.delete(doc.ref);
+    }
+    await batch.commit();
+  }
+
+  const batch = firestore.batch();
+  batch.delete(users().doc(id));
+  if (existing.employeeCode) batch.delete(employeeCodes().doc(existing.employeeCode));
+  batch.delete(userEmails().doc(existing.email));
+  await batch.commit();
 
   await recordAudit({
     actorId: actor.id,
@@ -401,11 +537,11 @@ export async function deleteEmployee(id: string): Promise<void> {
 
 export async function resetEmployeePassword(id: string, newPassword: string): Promise<void> {
   const actor = await assertRole("ADMIN");
-  const existing = await db.user.findUnique({ where: { id } });
+  const existing = await getUserById(id);
   if (!existing) throw new NotFoundError("Karyawan tidak ditemukan.");
 
   const passwordHash = await hashPassword(newPassword);
-  await db.user.update({ where: { id }, data: { passwordHash } });
+  await users().doc(id).update({ passwordHash, updatedAt: new Date() });
 
   await recordAudit({
     actorId: actor.id,
@@ -418,42 +554,18 @@ export async function resetEmployeePassword(id: string, newPassword: string): Pr
 
 /** Blocks any change that would remove the organization's last super admin. */
 async function assertNotLastSuperAdmin(excludingUserId: string): Promise<void> {
-  const remaining = await db.user.count({
-    where: { role: "SUPER_ADMIN", isActive: true, id: { not: excludingUserId } },
-  });
+  const snapshot = await users().get();
+  const remaining = snapshot.docs
+    .map((doc) => toUser(doc.id, doc.data()))
+    .filter(
+      (user) =>
+        user.role === "SUPER_ADMIN" && user.isActive && user.id !== excludingUserId,
+    ).length;
   if (remaining === 0) {
     throw new ForbiddenError(
-      "Ini adalah satu-satunya Super Admin aktif. Promosikan admin lain terlebih dahulu.",
+      "Ini adalah satu-satunya Super Admin aktif. Promosikan admin terlebih dahulu.",
     );
   }
-}
-
-/** True for a PostgreSQL unique-constraint violation, whatever layer raised it. */
-function isUniqueViolation(error: unknown): boolean {
-  if (error instanceof Error && "code" in error) {
-    const code = (error as { code?: string }).code;
-    if (code === "P2002") return true;
-  }
-  // With a driver adapter the Prisma code may be nested under the driver error.
-  if (error && typeof error === "object" && "meta" in error) {
-    const nested = (error as { meta?: { driverAdapterError?: { code?: string } } }).meta
-      ?.driverAdapterError;
-    if (nested?.code === "23505") return true;
-  }
-  return false;
-}
-
-function translateUniqueError(error: unknown, message: string): Error {
-  if (isUniqueViolation(error)) {
-    return new Error(message);
-  }
-  if (error instanceof Error && "code" in error) {
-    const code = (error as { code?: string }).code;
-    if (code === "P2003") {
-      return new Error("Data masih terkait dengan entitas lain dan tidak dapat dihapus.");
-    }
-  }
-  return error instanceof Error ? error : new Error("Terjadi kesalahan tak terduga.");
 }
 
 // ---------------------------------------------------------------------------
@@ -462,14 +574,14 @@ function translateUniqueError(error: unknown, message: string): Error {
 
 export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
   const user = await assertUser();
-  const record = await db.user.findUnique({ where: { id: user.id } });
+  const record = await getUserById(user.id);
   if (!record) throw new NotFoundError("Akun tidak ditemukan.");
 
   const ok = await bcrypt.compare(currentPassword, record.passwordHash);
   if (!ok) throw new Error("Password saat ini salah.");
 
   const passwordHash = await hashPassword(newPassword);
-  await db.user.update({ where: { id: user.id }, data: { passwordHash } });
+  await users().doc(user.id).update({ passwordHash, updatedAt: new Date() });
 }
 
 // ---------------------------------------------------------------------------
@@ -486,28 +598,48 @@ export interface ScheduleInput {
   makeDefault: boolean;
 }
 
+async function scheduleUsage(id: string): Promise<number> {
+  const snapshot = await users().where("scheduleId", "==", id).get();
+  return snapshot.size;
+}
+
+async function syncSettingDefault(scheduleId: string | null): Promise<void> {
+  await firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID).set(
+    { defaultScheduleId: scheduleId, updatedAt: new Date() },
+    { merge: true },
+  );
+}
+
 export async function createSchedule(input: ScheduleInput): Promise<ScheduleWithUsage> {
   const actor = await assertRole("ADMIN");
+  const scheduleId = crypto.randomUUID();
+  const now = new Date();
 
-  const created = await db.$transaction(async (tx) => {
+  const created = await firestore.runTransaction(async (tx) => {
+    const snapshot = await tx.get(schedules());
     if (input.makeDefault) {
-      await tx.workSchedule.updateMany({ data: { isOrganizationDefault: false } });
+      for (const doc of snapshot.docs) {
+        tx.update(doc.ref, { isOrganizationDefault: false, updatedAt: now });
+      }
     }
-    return tx.workSchedule.create({
-      data: {
-        name: input.name.trim(),
-        startTime: input.startTime,
-        endTime: input.endTime,
-        lateToleranceMinutes: input.lateToleranceMinutes,
-        breakMinutes: input.breakMinutes,
-        isActive: input.isActive,
-        isOrganizationDefault: input.makeDefault,
-      },
-      include: { _count: { select: { users: true } } },
-    });
+
+    const data = {
+      name: input.name.trim(),
+      description: null,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      lateToleranceMinutes: input.lateToleranceMinutes,
+      breakMinutes: input.breakMinutes,
+      isActive: input.isActive,
+      isOrganizationDefault: input.makeDefault,
+      createdAt: now,
+      updatedAt: now,
+    };
+    tx.set(schedules().doc(scheduleId), data);
+    return toWorkSchedule(scheduleId, data);
   });
 
-  await syncSettingDefault(created.id);
+  if (input.makeDefault) await syncSettingDefault(created.id);
 
   await recordAudit({
     actorId: actor.id,
@@ -517,34 +649,40 @@ export async function createSchedule(input: ScheduleInput): Promise<ScheduleWith
     summary: `Membuat jadwal ${created.name} (${created.startTime}-${created.endTime})`,
   });
 
-  return created;
+  return { ...created, _count: { users: 0 } };
 }
 
 export async function updateSchedule(id: string, input: ScheduleInput): Promise<ScheduleWithUsage> {
   const actor = await assertRole("ADMIN");
-  const existing = await db.workSchedule.findUnique({ where: { id } });
-  if (!existing) throw new NotFoundError("Jadwal tidak ditemukan.");
+  const existingSnapshot = await schedules().doc(id).get();
+  if (!existingSnapshot.exists) throw new NotFoundError("Jadwal tidak ditemukan.");
 
-  const updated = await db.$transaction(async (tx) => {
+  const now = new Date();
+  const updated = await firestore.runTransaction(async (tx) => {
+    const snapshot = await tx.get(schedules());
     if (input.makeDefault) {
-      await tx.workSchedule.updateMany({ data: { isOrganizationDefault: false } });
+      for (const doc of snapshot.docs) {
+        if (doc.id !== id) {
+          tx.update(doc.ref, { isOrganizationDefault: false, updatedAt: now });
+        }
+      }
     }
-    return tx.workSchedule.update({
-      where: { id },
-      data: {
-        name: input.name.trim(),
-        startTime: input.startTime,
-        endTime: input.endTime,
-        lateToleranceMinutes: input.lateToleranceMinutes,
-        breakMinutes: input.breakMinutes,
-        isActive: input.isActive,
-        ...(input.makeDefault ? { isOrganizationDefault: true } : {}),
-      },
-      include: { _count: { select: { users: true } } },
-    });
+
+    const data = {
+      name: input.name.trim(),
+      startTime: input.startTime,
+      endTime: input.endTime,
+      lateToleranceMinutes: input.lateToleranceMinutes,
+      breakMinutes: input.breakMinutes,
+      isActive: input.isActive,
+      ...(input.makeDefault ? { isOrganizationDefault: true } : {}),
+      updatedAt: now,
+    };
+    tx.update(schedules().doc(id), data);
+    return toWorkSchedule(id, { ...(existingSnapshot.data() ?? {}), ...data });
   });
 
-  await syncSettingDefault(id);
+  if (input.makeDefault) await syncSettingDefault(id);
 
   await recordAudit({
     actorId: actor.id,
@@ -554,24 +692,23 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
     summary: `Memperbarui jadwal ${updated.name} (${updated.startTime}-${updated.endTime})`,
   });
 
-  return updated;
+  return { ...updated, _count: { users: await scheduleUsage(id) } };
 }
 
 export async function deleteSchedule(id: string): Promise<void> {
   const actor = await assertRole("ADMIN");
-  const existing = await db.workSchedule.findUnique({
-    where: { id },
-    include: { _count: { select: { users: true } } },
-  });
-  if (!existing) throw new NotFoundError("Jadwal tidak ditemukan.");
+  const existingSnapshot = await schedules().doc(id).get();
+  if (!existingSnapshot.exists) throw new NotFoundError("Jadwal tidak ditemukan.");
+  const existing = toWorkSchedule(existingSnapshot.id, existingSnapshot.data() ?? {});
 
-  if (existing._count.users > 0) {
+  const usedBy = await scheduleUsage(id);
+  if (usedBy > 0) {
     throw new Error(
-      `Jadwal masih digunakan oleh ${existing._count.users} karyawan. Lepaskan terlebih dahulu.`,
+      `Jadwal masih digunakan oleh ${usedBy} karyawan. Lepaskan terlebih dahulu.`,
     );
   }
 
-  await db.workSchedule.delete({ where: { id } });
+  await schedules().doc(id).delete();
   if (existing.isOrganizationDefault) {
     await syncSettingDefault(null);
   }
@@ -584,13 +721,3 @@ export async function deleteSchedule(id: string): Promise<void> {
     summary: `Menghapus jadwal ${existing.name}`,
   });
 }
-
-/** Points the singleton settings row at the organization default schedule. */
-async function syncSettingDefault(scheduleId: string | null): Promise<void> {
-  await db.setting.upsert({
-    where: { id: 1 },
-    create: { id: 1, defaultScheduleId: scheduleId },
-    update: { defaultScheduleId: scheduleId },
-  });
-}
-

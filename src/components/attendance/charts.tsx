@@ -13,7 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { STATUS_DESCRIPTOR } from "@/lib/attendance/time";
-import type { AttendanceStatus } from "@/generated/prisma/enums";
+import type { AttendanceStatus } from "@/lib/domain";
 
 /**
  * Chart wrappers.

@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { FileClock, MapPin } from "lucide-react";
 import { requireRole } from "@/lib/dal/auth";
 import { getAttendanceReport, getDepartments } from "@/lib/dal/reports";
-import { AttendanceStatus } from "@/generated/prisma/enums";
+import { AttendanceStatus } from "@/lib/domain";
 import { STATUS_DESCRIPTOR, formatDuration } from "@/lib/attendance/time";
 import { AttendanceFilters } from "@/components/attendance/attendance-filters";
 import { Pagination } from "@/components/attendance/pagination";

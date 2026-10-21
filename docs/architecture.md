@@ -9,7 +9,8 @@ bawah ini dicatat beserta alasannya supaya mudah direview dan dikembangkan.
 
 Aplikasi absensi karyawan berbasis web yang **responsif** (Android, iPhone, tablet, desktop) dan
 **installable** sebagai PWA. Dibangun dengan Next.js App Router (Server Components + Server
-Actions), Prisma ORM di atas PostgreSQL, dan Tailwind CSS + komponen bergaya shadcn/ui.
+Actions), Firebase Admin SDK di atas Cloud Firestore, dan Tailwind CSS + komponen bergaya
+shadcn/ui.
 
 Prinsip utama:
 
@@ -17,9 +18,9 @@ Prinsip utama:
    (`Date.now()` di server). Nilai dari klien tidak pernah dipercaya untuk penentuan waktu.
 2. **Otorisasi ditegakkan di server, di setiap akses data.** `proxy.ts` hanya untuk redirect UX
    (optimistic check), bukan batas keamanan.
-3. **Integritas absensi dijamin database**, bukan sekadar validasi aplikasi — `@@unique([userId,
-   workDate])` membuat check-in ganda mustahil secara struktural, dan seluruh mutasi berjalan di
-   dalam `prisma.$transaction`.
+3. **Integritas absensi dijamin database**, bukan sekadar validasi aplikasi — dokumen
+   `attendance/{userId}_{YYYY-MM-DD}` membuat check-in ganda mustahil secara struktural, dan
+   seluruh mutasi berjalan di dalam `firestore.runTransaction`.
 4. **Tidak ada data sensitif di cache PWA.** Service worker hanya melakukan *network-first* tanpa
    penyimpanan respons untuk request yang membutuhkan autentikasi.
 
@@ -28,9 +29,10 @@ Prinsip utama:
 ## 2. Struktur Direktori
 
 ```
-prisma/
-  schema.prisma          Definisi model database
-  seed.ts                Data dummy untuk demo
+scripts/
+  seed-firestore.ts      Data dummy untuk demo
+  bootstrap-admin.ts     Membuat SUPER_ADMIN pertama
+  migrate-postgres-to-firestore.ts  Impor data lama (sekali pakai)
 src/
   app/
     (auth)/login         Halaman login (publik)
@@ -54,7 +56,10 @@ src/
     attendance/          Kartu check-in/out, tabel riwayat
     admin/               Form & tabel admin
   lib/
-    db.ts                Prisma client singleton
+    domain.ts            Enum & tipe domain (pengganti tipe Prisma)
+    firebase-config.ts   Inisialisasi Firebase Admin (dipakai app & script)
+    db.ts                Singleton Firestore + mapper dokumen
+    realtime.ts          Polling dokumen sinyal untuk SSE
     session.ts           Enkripsi/dekripsi cookie sesi (jose)
     dal/                 Data Access Layer — satu-satunya pintu ke DB
       auth.ts
@@ -76,31 +81,36 @@ tests/                   Unit test Vitest
 
 ---
 
-## 3. Model Database
+## 3. Model Data (Firestore)
 
-| Model | Tujuan |
+| Koleksi | Tujuan |
 | --- | --- |
-| `User` | Akun karyawan/admin. Menyimpan `passwordHash` (bcrypt), `role`, `isActive`. |
-| `WorkSchedule` | Jadwal kerja: jam mulai, jam selesai, toleransi keterlambatan. |
-| `Attendance` | Satu baris per karyawan per hari kerja. Sumber kebenaran kehadiran. |
-| `WorkLocation` | Geo-fence (pusat + radius) untuk validasi lokasi opsional. |
-| `Setting` | Konfigurasi global (jam kerja default, keterlambatan, wajib lokasi). |
-| `AuditLog` | Jejak aktivitas administratif. Append-only. |
+| `users/{userId}` | Akun karyawan/admin. Menyimpan `passwordHash` (bcrypt), `role`, `isActive`. |
+| `schedules/{scheduleId}` | Jadwal kerja: jam mulai, jam selesai, toleransi keterlambatan. |
+| `attendance/{userId}_{YYYY-MM-DD}` | Satu dokumen per karyawan per hari kerja. Sumber kebenaran kehadiran. |
+| `locations/{locationId}` | Geo-fence (pusat + radius) untuk validasi lokasi opsional. |
+| `settings/organization` | Konfigurasi global (zona waktu, jadwal default, wajib lokasi). |
+| `auditLogs/{logId}` | Jejak aktivitas administratif. Append-only. |
+| `userEmails/{email}` | Indeks unik email → `userId` (Firestore tidak punya unique index). |
+| `employeeCodes/{code}` | Indeks unik kode karyawan → `userId`. |
+| `counters/{prefix}` | Penomoran kode karyawan berikutnya. |
+| `realtime/attendance` | Dokumen sinyal untuk SSE (tanpa PII). |
 
 ### Aturan integritas di level database
 
-- `Attendance @@unique([userId, workDate])` — **mencegah check-in ganda secara struktural.**
-- `User.email` unik (disimpan dalam bentuk ternormalisasi lowercase).
-- `User.employeeCode` unik bila tidak null.
-- Foreign key `onDelete: Cascade` dari `Attendance` → `User` (data absensi ikut terhapus bila
-  akun dihapus), `Restrict` dari `User` → `WorkSchedule` (jadwal tidak boleh terhapus selama masih
-  dipakai).
+- ID dokumen `attendance/{userId}_{workDate}` — **mencegah check-in ganda secara struktural**;
+  penulisan kedua gagal dengan `ALREADY_EXISTS`.
+- `userEmails/{email}` dan `employeeCodes/{code}` dibuat dalam transaksi/batch yang sama dengan
+  `users/{userId}`, sehingga dua akun tidak dapat memakai email atau kode yang sama.
+- Penghapusan akun menghapus dokumen `attendance` miliknya di batch yang sama; penghapusan jadwal
+  ditolak selama masih ada `users` yang menunjuk ke jadwal tersebut.
+- Semua mutasi multi-dokumen memakai `firestore.runTransaction` atau `WriteBatch`.
 
 ### Konsep kunci
 
-**`workDate`** adalah tanggal kalender lokal (00:00 pada zona waktu aplikasi), **bukan** timestamp
-UTC. Ini penting agar "absen hari ini" konsisten definisinya di seluruh aplikasi, dan agar
-pemeriksaan hari kerja bisa memakai `@db.Date` yang membandingkan langsung di SQL.
+**`workDate`** adalah tanggal kalender lokal dalam format string `YYYY-MM-DD`, **bukan**
+timestamp UTC. String dipilih agar query rentang (`>=`, `<=`) tidak memerlukan composite index,
+dan agar "absen hari ini" konsisten definisinya di seluruh aplikasi.
 
 **`lateMinutes`** disimpan di database (bukan dihitung ulang saat baca) karena toleransi
 keterlambatan bisa diubah admin di kemudian waktu; menyimpan nilai saat kejadian terjadi menjaga
@@ -156,9 +166,11 @@ Hierarki diimplementasikan sebagai urutan numerik (`ROLE_RANK`) sehingga pemerik
 3. Server mengambil `now = new Date()` — **waktu klien diabaikan**.
 4. Validasi geo-fence bila `Setting.requireLocationValidation` aktif.
 5. Transaksi:
-   - `prisma.attendance.create({ workDate })` — gagal dengan `P2002` bila sudah ada.
+   - `attendance/{userId}_{workDate}` dibuat dengan `create()` — gagal dengan `ALREADY_EXISTS`
+     bila sudah ada.
    - Status dihitung dari `scheduledStart + lateTolerance` vs `now`.
-6. `P2002` ditangkap dan diterjemahkan menjadi error domain "Anda sudah check-in hari ini".
+6. `ALREADY_EXISTS` ditangkap dan diterjemahkan menjadi error domain "Anda sudah check-in hari
+   ini".
 
 ### Check-out
 
@@ -183,11 +195,12 @@ Pendekatan yang dipilih: **IANA timezone string + konversi eksplisit ke UTC**, b
 `timestamp with time zone` untuk "jam kerja".
 
 Alasannya, batas hari kerja adalah konsep kalender lokal. Dengan menyimpan `workDate` sebagai
-`@db.Date` dan menyimpan titik waktu sebagai `timestamptz`, definisi "hari kerja" menjadi tegas
-dan independen terhadap zona waktu server.
+string `YYYY-MM-DD` dan titik waktu sebagai `Timestamp` Firestore, definisi "hari kerja" menjadi
+tegas dan independen terhadap zona waktu server.
 
-> **Batasan yang diketahui:** konversi `IANA → offset` memakai pustaka `date-fns-tz` agar tetap
-> benar pada DST. Seed data dikurasi agar jatuh pada rentang waktu tanpa transisi DST.
+> **Batasan yang diketahui:** konversi `IANA → offset` memakai `Intl.DateTimeFormat`, bukan offset
+> hardcode, sehingga tetap benar pada DST. Seed data dikurasi agar jatuh pada rentang waktu tanpa
+> transisi DST.
 
 ---
 
@@ -222,9 +235,10 @@ Vitest dengan dua kelompok:
 
 1. **Unit — logika domain murni** (`lib/attendance/*`): perhitungan jam kerja, toleransi
    keterlambatan, Haversine, pembentukan status. Tidak butuh database, dijalankan di setiap CI.
-2. **Integrasi — service layer** terhadap database PostgreSQL uji, memakai `DATABASE_URL` dari
-   `TEST_DATABASE_URL`. Menguji aturan yang dijamin database: check-in ganda ditolak, check-out
-   tanpa check-in ditolak, role diverifikasi di server.
+2. **Integrasi — service layer** terhadap **Firestore Emulator**, dijalankan dengan
+   `npm run test:integration`. Menguji aturan yang dijamin database: check-in ganda ditolak,
+   check-out tanpa check-in ditolak, role diverifikasi di server. Emulator dijalankan otomatis
+   oleh `firebase emulators:exec`, sehingga tidak perlu database eksternal.
 
 ---
 
@@ -232,48 +246,56 @@ Vitest dengan dua kelompok:
 
 ### Database
 
-PostgreSQL, accessed through Prisma's `@prisma/adapter-pg` driver adapter. Any
-PostgreSQL provider works — the choice affects only `DATABASE_URL`.
+Cloud Firestore, diakses **hanya dari server** memakai Firebase Admin SDK dengan service account.
+Tidak ada Firebase config atau API key yang dikirim ke browser.
 
-| | Lokal | Supabase (free) |
-| --- | --- | --- |
-| Koneksi | `localhost:5432` | session pooler, port 5432 |
-| TLS | tidak | `sslmode=require` (`DATABASE_SSL`) |
-| Catatan | untuk `npm run db:migrate` | project akan **pause setelah 1 minggu idle**, di-resume manual dari dashboard |
+Environment yang dibutuhkan:
 
-> **Pakai *session* pooler, bukan *transaction* pooler.** Prisma dan koneksi
-> `pg` yang dipakai untuk LISTEN/NOTIFY memerlukan sesi yang bisa menahan
-> `LISTEN` terbuka; transaction pooler mengembalikan sesi ke pool dan LISTEN
-> ikut hilang.
+| Variabel | Isi |
+| --- | --- |
+| `FIREBASE_PROJECT_ID` | Project ID Firebase. |
+| `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY` | Service account (cara utama). |
+| `FIREBASE_SERVICE_ACCOUNT_JSON` | Alternatif: JSON service account dalam satu baris/base64. |
+| `FIRESTORE_EMULATOR_HOST` | Hanya untuk test lokal; diisi otomatis oleh `firebase emulators:exec`. |
 
-Memindahkan hosting ke luar tidak menyentuh lapisan DAL — tidak ada kode yang
-berubah, hanya nilai environment.
+`firestore.rules` menolak semua akses klien (`allow read, write: if false`). Aturan itu bukan
+satu-satunya lapisan: Admin SDK memang mem-bypass rules, dan browser tidak pernah memegang
+kredensial Firebase.
+
+Perintah operasional:
+
+```bash
+npm run db:check                  # cek koneksi + jumlah dokumen
+npm run db:seed                   # data demo (jangan di production)
+npm run bootstrap:admin           # SUPER_ADMIN pertama
+npm run db:migrate-from-postgres -- --apply   # impor data Supabase lama (sekali pakai)
+```
 
 ### Realtime
 
-Dashboard admin memperbarui diri sendiri lewat **Postgres LISTEN/NOTIFY** yang
-diteruskan sebagai **Server-Sent Events**.
+Dashboard admin memperbarui diri sendiri lewat **Server-Sent Events** yang dipicu oleh dokumen
+sinyal Firestore `realtime/attendance`.
 
 Dua pendekatan yang sengaja **tidak** dipakai:
 
 | Alternatif | Kenapa tidak |
 | --- | --- |
 | Event bus in-memory | Tiap Server Action di Vercel bisa jalan di *instance* serverless berbeda dengan heap sendiri. Bus modul akan membuang semua event di production sambil tetap terlihat bekerja di `npm run dev`. |
-| Supabase Realtime / Postgres Changes | Berlangganan dari browser memakai `anon` key, sehingga butuh RLS policy yang membocorkan baris absensi ke siapa pun yang memegang publishable key. |
+| Firebase Client SDK / `onSnapshot` di browser | Akan mengirim config Firebase ke browser dan membutuhkan rules baca, sehingga baris absensi bisa dibaca siapa pun yang memegang config tersebut. Admin SDK juga tidak menyediakan `onSnapshot`. |
 
-Yang terjadi sebenarnya: server melakukan `pg_notify` setelah commit, route
-`/api/attendance/stream` menerimanya, lalu browser memanggil `router.refresh()`.
-**Data absensi tidak pernah keluar lewat kanal ini** — payloadnya hanya
-`{ type, at }`, dan data asli dimuat ulang lewat Server Component yang sudah
-menegakkan otorisasi.
+Yang terjadi sebenarnya: setelah commit, server menulis `{ type, at, id }` ke
+`realtime/attendance`. Route `/api/attendance/stream` melakukan polling dokumen itu tiap 10 detik
+per koneksi, lalu browser memanggil `router.refresh()`. **Data absensi tidak pernah keluar lewat
+kanal ini** — payloadnya hanya sinyal perubahan, dan data asli dimuat ulang lewat Server Component
+yang sudah menegakkan otorisasi.
 
-Konsekuensinya batas keamanan di §4 tetap utuh: tidak ada RLS yang dilonggarkan,
-tidak ada kredensial database yang sampai ke browser, dan `Cache-Control:
-no-store` masih berlaku karena SSE bukan cache.
+Konsekuensinya batas keamanan di §4 tetap utuh: tidak ada rules yang dilonggarkan, tidak ada
+kredensial Firebase yang sampai ke browser, dan `Cache-Control: no-store` masih berlaku karena SSE
+bukan cache.
 
-Endpoint ini `ADMIN`-only, memakai cookie sesi yang sama dengan halaman lain.
-Heartbeat 25 detik menjaga koneksi tetap hidup sekaligus mendeteksi klien yang
-pergi, supaya sesi LISTEN tidak bocor di database.
+Endpoint ini `ADMIN`-only, memakai cookie sesi yang sama dengan halaman lain. Heartbeat 25 detik
+menjaga koneksi tetap hidup sekaligus mendeteksi klien yang pergi; polling dihentikan saat koneksi
+ditutup.
 
 ---
 
@@ -283,9 +305,10 @@ pergi, supaya sesi LISTEN tidak bocor di database.
 | --- | --- | --- |
 | Auth library | JWT + `jose` sendiri, bukan NextAuth/Clerk | Nol dependensi eksternal, kontrol penuh atas payload & cookie. Karena Next.js mendokumentasikan pola `jose`, ini tetap idiomatik. |
 | Sesi di DB | Tidak (stateless) | Skala sederhana; kompensasi dilakukan dengan pemuatan ulang user tiap request. |
-| Zona waktu | IANA string + `date-fns-tz` | Menangani DST dengan benar dibanding offset hardcode. |
+| Zona waktu | IANA string + `Intl.DateTimeFormat` | Menangani DST dengan benar dibanding offset hardcode, tanpa dependensi tambahan. |
 | Waktu check-in | `Date.now()` di server | Requirements; klien tidak dipercaya. |
-| Pencegahan double check-in | Unik DB `(userId, workDate)` | Jaminan integritas tidak bergantung pada logika aplikasi. |
+| Pencegahan double check-in | ID dokumen deterministik `attendance/{userId}_{workDate}` | Jaminan integritas tidak bergantung pada logika aplikasi; penulisan kedua gagal `ALREADY_EXISTS`. |
+| Database | Firestore + Admin SDK di server | Tidak ada kredensial database di browser; rules menolak semua akses klien. |
 | Role hierarchy | Rank numerik | Mempermudah pemeriksaan `hasRole`. |
 | Menit keterlambatan | Disimpan saat kejadian | Konsisten dengan aturan yang berlaku waktu itu. |
 | Geo-fence | Opsional via setting | Desktop sering tidak dapat mengambil lokasi; memaksa lokasi akan merusak UX. |

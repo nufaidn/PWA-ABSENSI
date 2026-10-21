@@ -10,7 +10,7 @@ import {
   type AttendanceSummary,
   type StatusGroup,
 } from "@/lib/attendance/summary";
-import type { AttendanceStatus } from "@/generated/prisma/enums";
+import type { AttendanceStatus } from "@/lib/domain";
 
 function group(status: AttendanceStatus, count: number): StatusGroup {
   return { status, _count: { _all: count } };

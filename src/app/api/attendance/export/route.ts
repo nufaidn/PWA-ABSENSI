@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AttendanceStatus } from "@/generated/prisma/enums";
+import { AttendanceStatus } from "@/lib/domain";
 import { getReportForExport, type ReportFilters } from "@/lib/dal/reports";
 import { ForbiddenError, UnauthorizedError } from "@/lib/dal/auth";
 import { buildReportCsv, reportFilename } from "@/lib/reports-csv";

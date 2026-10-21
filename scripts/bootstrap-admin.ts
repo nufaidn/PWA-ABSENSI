@@ -1,7 +1,7 @@
-import { Client } from "pg";
-import bcrypt from "bcryptjs";
 import "dotenv/config";
+import bcrypt from "bcryptjs";
 import { randomBytes } from "node:crypto";
+import { firestore } from "../src/lib/firebase-config";
 
 /**
  * Creates the single SUPER_ADMIN account a fresh deployment needs.
@@ -19,38 +19,28 @@ import { randomBytes } from "node:crypto";
  * working login or be re-run on a live database.
  */
 
+const COLLECTIONS = {
+  users: "users",
+  settings: "settings",
+  userEmails: "userEmails",
+} as const;
+
+const SETTINGS_DOC_ID = "organization";
+
 /** Wrapped in main(): the project is CommonJS, so tsx rejects top-level await. */
 async function main(): Promise<void> {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set.");
-
   const args = process.argv.slice(2).filter((a) => a !== "--apply");
   const email = (args[0] ?? process.env.BOOTSTRAP_ADMIN_EMAIL ?? "admin@company.test").toLowerCase();
 
-  // Supplied through the environment or stdin-free argument so the password does
+  // Supplied through the environment or a generated value so the password does
   // not end up in shell history or in a file committed by accident.
   const password = process.env.BOOTSTRAP_ADMIN_PASSWORD ?? randomPassword();
 
-  const ssl = process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false };
-  const client = new Client({ connectionString: url, ssl });
-  await client.connect();
-
-  const schemaResult = await client.query<{ current_schema: string }>("select current_schema()");
-  if (schemaResult.rows[0]?.current_schema !== "public") {
+  const existing = await firestore.collection(COLLECTIONS.users).limit(1).get();
+  if (!existing.empty) {
     console.log(
-      `Connected to schema "${schemaResult.rows[0]?.current_schema}" (expected "public"). Refusing.`,
+      `Refusing to run: ${existing.size} account(s) already exist. Delete them first if you really mean to reset.`,
     );
-    await client.end();
-    process.exitCode = 1;
-    return;
-  }
-
-  const existing = await client.query<{ n: number }>("select count(*)::int as n from users");
-  if ((existing.rows[0]?.n ?? 0) > 0) {
-    console.log(
-      `Refusing to run: ${existing.rows[0]?.n} account(s) already exist. Delete them first if you really mean to reset.`,
-    );
-    await client.end();
     process.exitCode = 1;
     return;
   }
@@ -59,22 +49,35 @@ async function main(): Promise<void> {
   const passwordHash = await bcrypt.hash(password, 12);
   const now = new Date();
 
-  await client.query(
-    `insert into users (id, email, "passwordHash", name, role, "isActive", "createdAt", "updatedAt")
-     values ($1, $2, $3, $4, 'SUPER_ADMIN', true, $5, $5)`,
-    [id, email, passwordHash, "Administrator", now],
-  );
-
-  // The settings row is a singleton the app expects to exist; `getSettings()`
+  const batch = firestore.batch();
+  batch.set(firestore.collection(COLLECTIONS.users).doc(id), {
+    email,
+    passwordHash,
+    name: "Administrator",
+    employeeCode: null,
+    role: "SUPER_ADMIN",
+    department: null,
+    phone: null,
+    isActive: true,
+    scheduleId: null,
+    createdAt: now,
+    updatedAt: now,
+  });
+  batch.set(firestore.collection(COLLECTIONS.userEmails).doc(email), { userId: id });
+  // The settings document is a singleton the app expects to exist; `getSettings()`
   // would create it lazily, but writing it now keeps the deployment deterministic.
-  await client.query(
-    `insert into settings (id, "organizationName", timezone, "requireLocationValidation", "allowOutOfHoursCheckIn", "updatedAt")
-     values (1, $1, 'Asia/Jakarta', false, true, $2)
-     on conflict (id) do nothing`,
-    [process.env.BOOTSTRAP_ORG_NAME ?? "Perusahaan Saya", now],
+  batch.set(
+    firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID),
+    {
+      organizationName: process.env.BOOTSTRAP_ORG_NAME ?? "Perusahaan Saya",
+      timezone: "Asia/Jakarta",
+      defaultScheduleId: null,
+      requireLocationValidation: false,
+      updatedAt: now,
+    },
+    { merge: true },
   );
-
-  await client.end();
+  await batch.commit();
 
   console.log(`SUPER_ADMIN created: ${email}`);
   console.log(`Password: ${password}`);

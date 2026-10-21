@@ -30,7 +30,9 @@ const nextConfig: NextConfig = {
    */
   cacheComponents: false,
 
-  serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "pg"],
+  // Firebase Admin uses Node-only transports (gRPC/HTTP2); keep it out of the
+  // bundler so Next.js does not try to trace or bundle its native dependencies.
+  serverExternalPackages: ["firebase-admin"],
 
   /**
    * Tailwind v4 is not a plain stylesheet: `@theme`, `@utility` and `@apply`

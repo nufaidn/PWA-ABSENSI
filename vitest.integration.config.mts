@@ -2,22 +2,22 @@ import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
 /**
- * Integration suite: talks to a real PostgreSQL instance.
+ * Integration suite: talks to the Firestore emulator.
  *
  * Kept in a separate config because it needs a different environment (node, not
- * jsdom), a throwaway schema, and a global setup that runs migrations. Splitting
- * it means `npm test` stays fast and never fails merely because a database is
- * unreachable — the database suite is opt-in via `npm run test:integration`.
+ * jsdom) and the emulator. Splitting it means `npm test` stays fast and never
+ * fails merely because Java or the Firebase CLI is unavailable — the emulator
+ * suite is opt-in via `npm run test:integration`, which starts the emulator with
+ * `firebase emulators:exec`.
  */
 export default defineConfig({
   test: {
     environment: "node",
     globals: true,
     include: ["tests/integration/**/*.test.ts"],
-    globalSetup: ["./tests/integration/global-setup.ts"],
     setupFiles: ["./tests/integration/setup.ts"],
-    // Tests share one schema; running files in parallel would let them truncate
-    // each other's fixtures mid-run.
+    // Tests share one emulator project; running files in parallel would let them
+    // clear each other's fixtures mid-run.
     fileParallelism: false,
     testTimeout: 30_000,
     hookTimeout: 60_000,

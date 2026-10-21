@@ -1,8 +1,14 @@
 ﻿import "server-only";
 import { cache } from "react";
-import type { AttendanceStatus } from "@/generated/prisma/enums";
-import { Prisma } from "@/generated/prisma/client";
-import { db } from "@/lib/db";
+import { FieldPath } from "firebase-admin/firestore";
+import type { Attendance, AttendanceStatus, User } from "@/lib/domain";
+import {
+  COLLECTIONS,
+  attendanceDocId,
+  firestore,
+  toAttendance,
+  toUser,
+} from "@/lib/db";
 import { assertRole, assertUser, ForbiddenError } from "./auth";
 import { getLocationPolicy } from "./settings";
 import {
@@ -14,10 +20,12 @@ import {
   summarizeStatuses,
   type AttendanceSummary,
   type DailyTrendPoint,
+  type StatusGroup,
 } from "@/lib/attendance/summary";
 import {
   ATTENDANCE_ROLES,
-  dateKeyToDbDate,
+  addDaysToDateKey,
+  formatDateKey,
   isAttendanceRole,
 } from "@/lib/attendance/time";
 
@@ -26,6 +34,11 @@ import {
  *
  * Every function here requires the ADMIN role via `assertRole`, so report data
  * can never be reached through an employee-scoped code path by accident.
+ *
+ * Firestore cannot join attendance to users or run SQL aggregates. The
+ * organisation is small enough that fetching the date range once and rolling it
+ * up in memory is cheaper and simpler than maintaining denormalised counters —
+ * and it keeps historical reports correct when a user is renamed or moved.
  */
 
 export const MAX_REPORT_RANGE_DAYS = 400;
@@ -44,8 +57,6 @@ export interface ReportFilters {
 export interface ResolvedReportRange {
   fromKey: string;
   toKey: string;
-  from: Date;
-  to: Date;
   days: number;
 }
 
@@ -67,8 +78,6 @@ export function resolveReportRange(
   return {
     fromKey,
     toKey,
-    from: dateFromKey(fromKey),
-    to: dateFromKey(toKey),
     days: Math.min(days, MAX_REPORT_RANGE_DAYS),
   };
 }
@@ -78,62 +87,85 @@ function isDateKey(value: string | undefined): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-/**
- * A `YYYY-MM-DD` key as UTC midnight.
- *
- * Shared with the write path so reads and writes agree on how a key maps to an
- * `@db.Date` value. When these diverged — writes using a zoned instant — every
- * attendance row was stored one day earlier than the shift it described.
- */
-function dateFromKey(key: string): Date {
-  return dateKeyToDbDate(key);
-}
-
 function daysBetween(fromKey: string, toKey: string): number {
-  return Math.round((dateFromKey(toKey).getTime() - dateFromKey(fromKey).getTime()) / 86_400_000);
+  return Math.round(
+    (Date.parse(`${toKey}T00:00:00Z`) - Date.parse(`${fromKey}T00:00:00Z`)) / 86_400_000,
+  );
 }
 
 export function shiftDateKey(dateKey: string, days: number): string {
-  const base = dateFromKey(dateKey);
-  base.setUTCDate(base.getUTCDate() + days);
-  return base.toISOString().slice(0, 10);
+  return addDaysToDateKey(dateKey, days);
 }
 
-function buildWhere(filters: ReportFilters, range: ResolvedReportRange): Prisma.AttendanceWhereInput {
-  const where: Prisma.AttendanceWhereInput = {
-    workDate: { gte: range.from, lte: range.to },
-  };
+function matchesUserFilters(user: User, filters: ReportFilters): boolean {
+  if (!isAttendanceRole(user.role)) return false;
+  if (filters.department && user.department !== filters.department) return false;
+  const search = filters.search?.trim().toLowerCase();
+  if (!search) return true;
+  return (
+    user.name.toLowerCase().includes(search) ||
+    user.email.toLowerCase().includes(search) ||
+    (user.employeeCode?.toLowerCase().includes(search) ?? false)
+  );
+}
 
-  if (filters.status && filters.status !== "ALL") {
-    where.status = filters.status;
-  }
+async function readUsers(): Promise<Map<string, User>> {
+  const snapshot = await firestore.collection(COLLECTIONS.users).get();
+  return new Map(snapshot.docs.map((doc) => [doc.id, toUser(doc.id, doc.data())]));
+}
 
-  if (filters.userId) {
-    where.userId = filters.userId;
-  }
+async function readAttendanceRange(fromKey: string, toKey: string): Promise<Attendance[]> {
+  const snapshot = await firestore
+    .collection(COLLECTIONS.attendance)
+    .where("workDate", ">=", fromKey)
+    .where("workDate", "<=", toKey)
+    .get();
+  return snapshot.docs.map((doc) => toAttendance(doc.id, doc.data()));
+}
 
-  // Reports describe the people who actually record attendance. Administrators
-  // are exempt, so their (historical) rows must not leak into totals or CSV.
-  const userFilter: Prisma.UserWhereInput = {
-    role: { in: [...ATTENDANCE_ROLES] },
-  };
-  if (filters.department) {
-    userFilter.department = filters.department;
-  }
-  if (filters.search) {
-    // `contains` + `mode: insensitive` keeps the search usable for names typed
-    // in any letter case without needing a trigram index at this scale.
-    userFilter.OR = [
-      { name: { contains: filters.search, mode: "insensitive" } },
-      { email: { contains: filters.search, mode: "insensitive" } },
-      { employeeCode: { contains: filters.search, mode: "insensitive" } },
-    ];
-  }
-  if (Object.keys(userFilter).length > 0) {
-    where.user = userFilter;
-  }
+async function readOwnAttendance(
+  userId: string,
+  fromKey: string,
+  toKey: string,
+): Promise<Attendance[]> {
+  const snapshot = await firestore
+    .collection(COLLECTIONS.attendance)
+    .where(FieldPath.documentId(), ">=", attendanceDocId(userId, fromKey))
+    .where(FieldPath.documentId(), "<=", attendanceDocId(userId, toKey))
+    .get();
+  return snapshot.docs
+    .map((doc) => toAttendance(doc.id, doc.data()))
+    .filter((record) => record.userId === userId);
+}
 
-  return where;
+function statusGroups(records: readonly Attendance[]): StatusGroup[] {
+  const counts = new Map<AttendanceStatus, number>();
+  for (const record of records) {
+    counts.set(record.status, (counts.get(record.status) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([status, count]) => ({
+    status,
+    _count: { _all: count },
+  }));
+}
+
+function sumWorked(records: readonly Attendance[]): number {
+  return records.reduce((sum, record) => sum + record.workedMinutes, 0);
+}
+
+function trendGroups(records: readonly Attendance[]) {
+  const counts = new Map<string, { status: AttendanceStatus; workDate: string; count: number }>();
+  for (const record of records) {
+    const key = `${record.workDate}|${record.status}`;
+    const existing = counts.get(key);
+    if (existing) existing.count += 1;
+    else counts.set(key, { status: record.status, workDate: record.workDate, count: 1 });
+  }
+  return [...counts.values()].map((entry) => ({
+    status: entry.status,
+    workDate: entry.workDate,
+    _count: { _all: entry.count },
+  }));
 }
 
 export interface ReportRow {
@@ -190,71 +222,59 @@ export async function getAttendanceReport(
 
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(200, Math.max(10, options.pageSize ?? 25));
-  const where = buildWhere(filters, range);
 
-  const [total, records, statusGroups, aggregates] = await Promise.all([
-    db.attendance.count({ where }),
-    db.attendance.findMany({
-      where,
-      orderBy: [{ workDate: "desc" }, { user: { name: "asc" } }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      select: {
-        id: true,
-        workDate: true,
-        status: true,
-        checkInAt: true,
-        checkOutAt: true,
-        lateMinutes: true,
-        workedMinutes: true,
-        outsideRadius: true,
-        checkInDistanceM: true,
-        user: { select: { id: true, name: true, email: true, employeeCode: true, department: true } },
-      },
-    }),
-    db.attendance.groupBy({ by: ["status"], where, _count: { _all: true } }),
-    db.attendance.aggregate({ where, _sum: { workedMinutes: true, lateMinutes: true } }),
+  const [records, users] = await Promise.all([
+    readAttendanceRange(range.fromKey, range.toKey),
+    readUsers(),
   ]);
 
-  const summary = summarizeStatuses(statusGroups, aggregates._sum.workedMinutes ?? 0);
-
-  // Trend and per-employee rollups are computed over the whole filtered range,
-  // not the current page, so the numbers never contradict the filter bar.
-  const trendGroups = await db.attendance.groupBy({
-    by: ["workDate", "status"],
-    where,
-    _count: { _all: true },
-    orderBy: { workDate: "asc" },
+  const filtered = records.filter((record) => {
+    const user = users.get(record.userId);
+    if (!user || !matchesUserFilters(user, filters)) return false;
+    if (filters.userId && record.userId !== filters.userId) return false;
+    if (filters.status && filters.status !== "ALL" && record.status !== filters.status) {
+      return false;
+    }
+    return true;
   });
 
-  const perEmployeeGroups = await db.attendance.groupBy({
-    by: ["userId", "status"],
-    where,
-    _count: { _all: true },
-    _sum: { workedMinutes: true },
-  });
+  const summary = summarizeStatuses(statusGroups(filtered), sumWorked(filtered));
 
-  const employeeMeta = await db.user.findMany({
-    where: { id: { in: [...new Set(perEmployeeGroups.map((g) => g.userId))] } },
-    select: { id: true, name: true, email: true, employeeCode: true, department: true },
-  });
-  const metaById = new Map(employeeMeta.map((u) => [u.id, u]));
+  const perEmployeeCounts = new Map<
+    string,
+    { status: AttendanceStatus; count: number; workedMinutes: number }
+  >();
+  for (const record of filtered) {
+    const key = `${record.userId}|${record.status}`;
+    const existing = perEmployeeCounts.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.workedMinutes += record.workedMinutes;
+    } else {
+      perEmployeeCounts.set(key, {
+        status: record.status,
+        count: 1,
+        workedMinutes: record.workedMinutes,
+      });
+    }
+  }
 
   const rollup = new Map<string, PerEmployeeSummary>();
-  for (const group of perEmployeeGroups) {
-    const meta = metaById.get(group.userId);
-    if (!meta) continue;
-    const entry = rollup.get(group.userId) ?? {
-      userId: meta.id,
-      name: meta.name,
-      employeeCode: meta.employeeCode,
-      department: meta.department,
+  for (const [key, group] of perEmployeeCounts) {
+    const userId = key.split("|")[0];
+    const user = users.get(userId);
+    if (!user) continue;
+    const entry = rollup.get(userId) ?? {
+      userId: user.id,
+      name: user.name,
+      employeeCode: user.employeeCode,
+      department: user.department,
       summary: emptySummary(),
       averageWorkedMinutes: 0,
     };
-    accumulateStatus(entry.summary, group.status, group._count._all);
-    entry.summary.totalWorkedMinutes += group._sum.workedMinutes ?? 0;
-    rollup.set(group.userId, entry);
+    accumulateStatus(entry.summary, group.status, group.count);
+    entry.summary.totalWorkedMinutes += group.workedMinutes;
+    rollup.set(userId, entry);
   }
 
   const perEmployee = [...rollup.values()]
@@ -268,43 +288,30 @@ export async function getAttendanceReport(
     })
     .sort((a, b) => a.name.localeCompare(b.name, "id"));
 
+  const sorted = [...filtered].sort((a, b) => {
+    const byDate = b.workDate.localeCompare(a.workDate);
+    if (byDate !== 0) return byDate;
+    return (users.get(a.userId)?.name ?? "").localeCompare(users.get(b.userId)?.name ?? "", "id");
+  });
+  const total = sorted.length;
+  const start = (page - 1) * pageSize;
+  const pageRecords = sorted.slice(start, start + pageSize);
+
   return {
-    rows: records.map((record) =>
-      toReportRow(record, policy.timezone),
-    ),
+    rows: pageRecords.map((record) => toReportRow(record, users.get(record.userId)!, policy.timezone)),
     total,
     page,
     pageSize,
     pageCount: Math.max(1, Math.ceil(total / pageSize)),
     range,
     summary,
-    averageWorkedMinutes: averageWorkedMinutes(aggregates._sum.workedMinutes ?? 0, summary),
-    trend: buildDailyTrend(range.fromKey, range.toKey, trendGroups),
+    averageWorkedMinutes: averageWorkedMinutes(sumWorked(filtered), summary),
+    trend: buildDailyTrend(range.fromKey, range.toKey, trendGroups(filtered)),
     perEmployee,
   };
 }
 
-function toReportRow(
-  record: {
-    id: string;
-    workDate: Date;
-    status: AttendanceStatus;
-    checkInAt: Date | null;
-    checkOutAt: Date | null;
-    lateMinutes: number;
-    workedMinutes: number;
-    outsideRadius: boolean;
-    checkInDistanceM: number | null;
-    user: {
-      id: string;
-      name: string;
-      email: string;
-      employeeCode: string | null;
-      department: string | null;
-    };
-  },
-  timezone: string,
-): ReportRow {
+function toReportRow(record: Attendance, user: User, timezone: string): ReportRow {
   const time = (value: Date | null) =>
     value
       ? new Intl.DateTimeFormat("id-ID", {
@@ -317,17 +324,13 @@ function toReportRow(
 
   return {
     id: record.id,
-    workDate: record.workDate.toISOString().slice(0, 10),
-    dateLabel: new Intl.DateTimeFormat("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(record.workDate),
-    userId: record.user.id,
-    userName: record.user.name,
-    email: record.user.email,
-    employeeCode: record.user.employeeCode,
-    department: record.user.department,
+    workDate: record.workDate,
+    dateLabel: formatDateKey(record.workDate),
+    userId: user.id,
+    userName: user.name,
+    email: user.email,
+    employeeCode: user.employeeCode,
+    department: user.department,
     status: record.status,
     checkInAt: record.checkInAt,
     checkOutAt: record.checkOutAt,
@@ -353,26 +356,32 @@ export async function getReportForExport(
   const policy = await getLocationPolicy();
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: policy.timezone }).format(new Date());
   const range = resolveReportRange(filters.from, filters.to, todayKey);
-  const where = buildWhere(filters, range);
 
-  const records = await db.attendance.findMany({
-    where,
-    orderBy: [{ workDate: "asc" }, { user: { name: "asc" } }],
-    select: {
-      id: true,
-      workDate: true,
-      status: true,
-      checkInAt: true,
-      checkOutAt: true,
-      lateMinutes: true,
-      workedMinutes: true,
-      outsideRadius: true,
-      checkInDistanceM: true,
-      user: { select: { id: true, name: true, email: true, employeeCode: true, department: true } },
-    },
+  const [records, users] = await Promise.all([
+    readAttendanceRange(range.fromKey, range.toKey),
+    readUsers(),
+  ]);
+
+  const filtered = records.filter((record) => {
+    const user = users.get(record.userId);
+    if (!user || !matchesUserFilters(user, filters)) return false;
+    if (filters.userId && record.userId !== filters.userId) return false;
+    if (filters.status && filters.status !== "ALL" && record.status !== filters.status) {
+      return false;
+    }
+    return true;
   });
 
-  return { rows: records.map((r) => toReportRow(r, policy.timezone)), range };
+  filtered.sort((a, b) => {
+    const byDate = a.workDate.localeCompare(b.workDate);
+    if (byDate !== 0) return byDate;
+    return (users.get(a.userId)?.name ?? "").localeCompare(users.get(b.userId)?.name ?? "", "id");
+  });
+
+  return {
+    rows: filtered.map((record) => toReportRow(record, users.get(record.userId)!, policy.timezone)),
+    range,
+  };
 }
 
 export interface AdminOverview {
@@ -402,50 +411,44 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   await assertRole("ADMIN");
   const policy = await getLocationPolicy();
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: policy.timezone }).format(new Date());
-  const today = dateFromKey(todayKey);
   const range = resolveReportRange(shiftDateKey(todayKey, -29), todayKey, todayKey);
-  // Administrators are not part of the attendance population.
-  const attendanceUserWhere: Prisma.UserWhereInput = {
-    role: { in: [...ATTENDANCE_ROLES] },
-  };
 
-  const [employees, activeEmployees, todayGroups, recentActivity, monthGroups, monthSum] =
-    await Promise.all([
-      db.user.count({ where: attendanceUserWhere }),
-      db.user.count({ where: { ...attendanceUserWhere, isActive: true } }),
-      db.attendance.groupBy({
-        by: ["status"],
-        where: { workDate: { gte: today, lte: today }, user: attendanceUserWhere },
-        _count: { _all: true },
-      }),
-      db.attendance.findMany({
-        where: {
-          workDate: { gte: today, lte: today },
-          checkInAt: { not: null },
-          user: attendanceUserWhere,
-        },
-        orderBy: { checkInAt: "desc" },
-        take: 8,
-        select: {
-          checkInAt: true,
-          checkOutAt: true,
-          status: true,
-          lateMinutes: true,
-          user: { select: { name: true, department: true } },
-        },
-      }),
-      db.attendance.groupBy({
-        by: ["status"],
-        where: { workDate: { gte: range.from, lte: range.to }, user: attendanceUserWhere },
-        _count: { _all: true },
-      }),
-      db.attendance.aggregate({
-        where: { workDate: { gte: range.from, lte: range.to }, user: attendanceUserWhere },
-        _sum: { workedMinutes: true },
-      }),
-    ]);
+  const [users, todayRecords, monthRecords] = await Promise.all([
+    readUsers(),
+    readAttendanceRange(todayKey, todayKey),
+    readAttendanceRange(range.fromKey, range.toKey),
+  ]);
 
-  const todayCounts = summarizeStatuses(todayGroups, 0);
+  const attendanceUsers = [...users.values()].filter((user) => isAttendanceRole(user.role));
+  const employees = attendanceUsers.length;
+  const activeEmployees = attendanceUsers.filter((user) => user.isActive).length;
+
+  const todayFiltered = todayRecords.filter((record) => {
+    const user = users.get(record.userId);
+    return Boolean(user && isAttendanceRole(user.role));
+  });
+  const monthFiltered = monthRecords.filter((record) => {
+    const user = users.get(record.userId);
+    return Boolean(user && isAttendanceRole(user.role));
+  });
+
+  const todayCounts = summarizeStatuses(statusGroups(todayFiltered), 0);
+  const recentActivity = todayFiltered
+    .filter((record) => record.checkInAt !== null)
+    .sort((a, b) => (b.checkInAt?.getTime() ?? 0) - (a.checkInAt?.getTime() ?? 0))
+    .slice(0, 8)
+    .map((record) => {
+      const user = users.get(record.userId);
+      return {
+        id: record.id,
+        name: user?.name ?? "—",
+        department: user?.department ?? null,
+        status: record.status,
+        checkInAt: record.checkInAt,
+        checkOutAt: record.checkOutAt,
+        lateMinutes: record.lateMinutes,
+      };
+    });
 
   return {
     totals: {
@@ -456,16 +459,8 @@ export async function getAdminOverview(): Promise<AdminOverview> {
       todayAbsent: todayCounts.absent,
       todayOnLeave: todayCounts.leave,
     },
-    recentActivity: recentActivity.map((record) => ({
-      id: `${record.user.name}-${record.checkInAt?.getTime() ?? 0}`,
-      name: record.user.name,
-      department: record.user.department,
-      status: record.status,
-      checkInAt: record.checkInAt,
-      checkOutAt: record.checkOutAt,
-      lateMinutes: record.lateMinutes,
-    })),
-    summary: summarizeStatuses(monthGroups, monthSum._sum.workedMinutes ?? 0),
+    recentActivity,
+    summary: summarizeStatuses(statusGroups(monthFiltered), sumWorked(monthFiltered)),
     range,
   };
 }
@@ -491,42 +486,27 @@ export async function getOwnAnalytics(): Promise<{
   const policy = await getLocationPolicy();
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: policy.timezone }).format(new Date());
   const range = resolveReportRange(shiftDateKey(todayKey, -29), todayKey, todayKey);
-  const where: Prisma.AttendanceWhereInput = {
-    userId: user.id,
-    workDate: { gte: range.from, lte: range.to },
-  };
 
-  const [statusGroups, trendGroups, aggregates] = await Promise.all([
-    db.attendance.groupBy({ by: ["status"], where, _count: { _all: true } }),
-    db.attendance.groupBy({
-      by: ["workDate", "status"],
-      where,
-      _count: { _all: true },
-      orderBy: { workDate: "asc" },
-    }),
-    db.attendance.aggregate({ where, _sum: { workedMinutes: true } }),
-  ]);
-
-  const summary = summarizeStatuses(statusGroups, aggregates._sum.workedMinutes ?? 0);
+  const records = await readOwnAttendance(user.id, range.fromKey, range.toKey);
+  const workedMinutes = sumWorked(records);
+  const summary = summarizeStatuses(statusGroups(records), workedMinutes);
 
   return {
     summary,
-    averageWorkedMinutes: averageWorkedMinutes(aggregates._sum.workedMinutes ?? 0, summary),
-    trend: buildDailyTrend(range.fromKey, range.toKey, trendGroups),
+    averageWorkedMinutes: averageWorkedMinutes(workedMinutes, summary),
+    trend: buildDailyTrend(range.fromKey, range.toKey, trendGroups(records)),
     range,
   };
 }
 
 /** Distinct departments, for the report filter dropdown. */
 export const getDepartments = cache(async (): Promise<string[]> => {
-  const rows = await db.user.findMany({
-    where: {
-      department: { not: null },
-      role: { in: [...ATTENDANCE_ROLES] },
-    },
-    distinct: ["department"],
-    select: { department: true },
-    orderBy: { department: "asc" },
-  });
-  return rows.map((r) => r.department as string);
+  const users = await readUsers();
+  return [...new Set(
+    [...users.values()]
+      .filter((user) => isAttendanceRole(user.role) && user.department)
+      .map((user) => user.department as string),
+  )].sort((a, b) => a.localeCompare(b, "id"));
 });
+
+export { ATTENDANCE_ROLES };

@@ -4,7 +4,7 @@
  * Kept separate from the data layer so the rules that decide "late" and
  * "worked minutes" can be unit tested without a database or a server clock.
  */
-import type { AttendanceStatus } from "@/generated/prisma/enums";
+import type { AttendanceStatus } from "@/lib/domain";
 import {
   MS_PER_MINUTE,
   formatTimeString,

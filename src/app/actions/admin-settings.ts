@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { db } from "@/lib/db";
+import { COLLECTIONS, SETTINGS_DOC_ID, firestore, toWorkLocation } from "@/lib/db";
 import { NotFoundError, assertRole } from "@/lib/dal/auth";
 import { recordAudit } from "@/lib/dal/audit";
 import { createSchedule, deleteSchedule, updateSchedule } from "@/lib/dal/employees";
@@ -126,16 +126,23 @@ export async function createLocationAction(
   if (!parsed.success) return { ok: false, fieldErrors: fieldErrors(parsed.error) };
 
   try {
-    const created = await db.workLocation.create({ data: parsed.data });
+    const now = new Date();
+    const ref = firestore.collection(COLLECTIONS.locations).doc();
+    await ref.set({
+      ...parsed.data,
+      address: parsed.data.address ?? null,
+      createdAt: now,
+      updatedAt: now,
+    });
     await recordAudit({
       actorId: actor.id,
       action: "LOCATION_CREATED",
       entityType: "WorkLocation",
-      entityId: created.id,
-      summary: `Menambahkan lokasi absensi ${created.name} (radius ${created.radiusMeters} m)`,
+      entityId: ref.id,
+      summary: `Menambahkan lokasi absensi ${parsed.data.name} (radius ${parsed.data.radiusMeters} m)`,
     });
     revalidatePath("/admin/settings");
-    return { ok: true, message: `Lokasi ${created.name} berhasil ditambahkan.` };
+    return { ok: true, message: `Lokasi ${parsed.data.name} berhasil ditambahkan.` };
   } catch (error) {
     return { ok: false, ...toState(error) };
   }
@@ -163,7 +170,19 @@ export async function updateLocationAction(
   if (!parsed.success) return { ok: false, fieldErrors: fieldErrors(parsed.error) };
 
   try {
-    const updated = await db.workLocation.update({ where: { id }, data: parsed.data });
+    const ref = firestore.collection(COLLECTIONS.locations).doc(id);
+    const snapshot = await ref.get();
+    if (!snapshot.exists) throw new NotFoundError("Lokasi tidak ditemukan.");
+    const updated = toWorkLocation(snapshot.id, {
+      ...(snapshot.data() ?? {}),
+      ...parsed.data,
+      address: parsed.data.address ?? null,
+    });
+    await ref.update({
+      ...parsed.data,
+      address: parsed.data.address ?? null,
+      updatedAt: new Date(),
+    });
     await recordAudit({
       actorId: actor.id,
       action: "LOCATION_UPDATED",
@@ -187,10 +206,12 @@ export async function deleteLocationAction(
   if (!parsed.success) return { ok: false, error: "Permintaan tidak valid." };
 
   try {
-    const existing = await db.workLocation.findUnique({ where: { id: parsed.data.id } });
-    if (!existing) throw new NotFoundError("Lokasi tidak ditemukan.");
+    const ref = firestore.collection(COLLECTIONS.locations).doc(parsed.data.id);
+    const snapshot = await ref.get();
+    if (!snapshot.exists) throw new NotFoundError("Lokasi tidak ditemukan.");
+    const existing = toWorkLocation(snapshot.id, snapshot.data() ?? {});
 
-    await db.workLocation.delete({ where: { id: parsed.data.id } });
+    await ref.delete();
     await recordAudit({
       actorId: actor.id,
       action: "LOCATION_DELETED",
@@ -224,32 +245,43 @@ export async function updateSettingsAction(
   if (!parsed.success) return { ok: false, fieldErrors: fieldErrors(parsed.error) };
 
   try {
-    await db.setting.upsert({
-      where: { id: 1 },
-      create: { id: 1, ...parsed.data },
-      update: parsed.data,
-    });
+    const now = new Date();
+    await firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID).set(
+      {
+        organizationName: parsed.data.organizationName,
+        timezone: parsed.data.timezone,
+        defaultScheduleId: parsed.data.defaultScheduleId ?? null,
+        requireLocationValidation: parsed.data.requireLocationValidation,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
 
     // Keep the denormalised flag consistent so admin UIs can show which
     // schedule is the organization default without a second lookup.
     if (parsed.data.defaultScheduleId) {
-      await db.$transaction([
-        db.workSchedule.updateMany({
-          where: { id: { not: parsed.data.defaultScheduleId } },
-          data: { isOrganizationDefault: false },
-        }),
-        db.workSchedule.update({
-          where: { id: parsed.data.defaultScheduleId },
-          data: { isOrganizationDefault: true },
-        }),
-      ]);
+      const target = firestore
+        .collection(COLLECTIONS.schedules)
+        .doc(parsed.data.defaultScheduleId);
+      const targetSnapshot = await target.get();
+      if (!targetSnapshot.exists) throw new NotFoundError("Jadwal tidak ditemukan.");
+
+      const snapshot = await firestore.collection(COLLECTIONS.schedules).get();
+      const batch = firestore.batch();
+      for (const doc of snapshot.docs) {
+        batch.update(doc.ref, {
+          isOrganizationDefault: doc.id === parsed.data.defaultScheduleId,
+          updatedAt: now,
+        });
+      }
+      await batch.commit();
     }
 
     await recordAudit({
       actorId: actor.id,
       action: "SETTINGS_UPDATED",
       entityType: "Setting",
-      entityId: "1",
+      entityId: SETTINGS_DOC_ID,
       summary: `Memperbarui pengaturan: zona waktu ${parsed.data.timezone}, validasi lokasi ${
         parsed.data.requireLocationValidation ? "wajib" : "opsional"
       }`,

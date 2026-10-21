@@ -2,7 +2,7 @@
  * Attendance aggregation helpers — pure, so the maths behind every percentage
  * on the dashboards can be unit tested without touching the database.
  */
-import type { AttendanceStatus } from "@/generated/prisma/enums";
+import type { AttendanceStatus } from "@/lib/domain";
 
 export interface AttendanceSummary {
   totalDays: number;
@@ -34,7 +34,7 @@ export function emptySummary(): AttendanceSummary {
   };
 }
 
-/** Minimal shape accepted from a Prisma `groupBy` result. */
+/** Minimal shape accepted from an aggregated query. */
 export interface StatusGroup {
   status: AttendanceStatus;
   _count: { _all: number };
@@ -48,7 +48,7 @@ export interface StatusGroup {
  * which keeps `attendanceRate + absenceRate == 100` whenever both denominators
  * refer to the same day count.
  */
-/** Maps the Prisma enum onto the camelCase field names used in the summary. */
+/** Maps the status enum onto the camelCase field names used in the summary. */
 const STATUS_COUNT_KEY: Record<AttendanceStatus, keyof AttendanceSummary> = {
   PRESENT: "present",
   LATE: "late",
@@ -138,12 +138,15 @@ export interface DailyTrendPoint {
 export function buildDailyTrend(
   fromDateKey: string,
   toDateKey: string,
-  groups: readonly (StatusGroup & { workDate: Date })[]
+  groups: readonly (StatusGroup & { workDate: Date | string })[]
 ): DailyTrendPoint[] {
   const byKey = new Map<string, StatusGroup[]>();
 
   for (const group of groups) {
-    const key = group.workDate.toISOString().slice(0, 10);
+    const key =
+      typeof group.workDate === "string"
+        ? group.workDate.slice(0, 10)
+        : group.workDate.toISOString().slice(0, 10);
     const existing = byKey.get(key);
     if (existing) existing.push(group);
     else byKey.set(key, [group]);

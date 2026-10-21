@@ -1,4 +1,8 @@
-// Universal Attendance System — database schema
+// ARCHIVED — the application now uses Firestore (`src/lib/domain.ts`).
+// This file is kept only as a reference for the one-off PostgreSQL migration
+// script (`scripts/migrate-postgres-to-firestore.ts`). It is not used at runtime.
+//
+// Universal Attendance System — legacy database schema
 // Reference: https://pris.ly/d/prisma-schema
 
 generator client {

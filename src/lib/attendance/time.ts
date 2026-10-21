@@ -10,8 +10,7 @@
  * Keeping these separate is what makes "today's attendance" unambiguous
  * regardless of the server's own timezone.
  */
-import type { AttendanceStatus } from "@/generated/prisma/enums";
-import type { Role } from "@/generated/prisma/enums";
+import type { AttendanceStatus, Role } from "@/lib/domain";
 
 export type { Role };
 
@@ -147,16 +146,14 @@ export function fromLocalDateKey(dateKey: string, timezone: string): Date {
 /**
  * A `YYYY-MM-DD` key as a `Date` anchored to UTC midnight.
  *
- * Use this — not `fromLocalDateKey` — for anything stored in an `@db.Date`
- * column. Those columns hold a bare calendar date with no time or zone, and
- * PostgreSQL derives the stored value from the UTC date parts of whatever
- * `Date` it is handed.
+ * Firestore stores `workDate` as the string key itself, so production code does
+ * not need this. It remains useful for tests and for adapting legacy `Date`
+ * values without accidentally shifting the calendar day.
  *
  * Passing a zoned instant here is silently wrong: `fromLocalDateKey` returns
  * 17:00Z on the *previous* day for midnight in WIB, which truncates to the
  * previous calendar date. An attendance row for 2026-10-13 would be stored as
- * 2026-10-12 — shifting every report by a day and breaking the `(userId,
- * workDate)` unique constraint's meaning.
+ * 2026-10-12 — shifting every report by a day.
  */
 export function dateKeyToDbDate(dateKey: string): Date {
   const [y, m, d] = dateKey.split("-").map(Number);

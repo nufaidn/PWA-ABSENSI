@@ -10,7 +10,7 @@ import {
   updateEmployee,
 } from "@/lib/dal/employees";
 import { assertRole, ForbiddenError, NotFoundError, UnauthorizedError } from "@/lib/dal/auth";
-import type { Role } from "@/generated/prisma/enums";
+import type { Role } from "@/lib/domain";
 import {
   createEmployeeSchema,
   fieldErrors,

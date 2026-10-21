@@ -5,7 +5,7 @@ import {
   verifyAdminCredentials,
   verifyCredentials,
 } from "@/lib/dal/employees";
-import { Role } from "@/generated/prisma/enums";
+import { Role } from "@/lib/domain";
 
 /**
  * Credential verification, exercised against the real DAL and a real database.

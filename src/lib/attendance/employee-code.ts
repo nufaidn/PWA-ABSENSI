@@ -1,4 +1,4 @@
-import type { Role } from "@/generated/prisma/enums";
+import type { Role } from "@/lib/domain";
 
 /**
  * Employee code format.

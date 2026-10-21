@@ -1,7 +1,14 @@
 import "server-only";
 import { cache } from "react";
-import type { WorkLocation, WorkSchedule } from "@/generated/prisma/client";
-import { db } from "@/lib/db";
+import type { WorkLocation, WorkSchedule } from "@/lib/domain";
+import {
+  COLLECTIONS,
+  SETTINGS_DOC_ID,
+  firestore,
+  toSetting,
+  toWorkLocation,
+  toWorkSchedule,
+} from "@/lib/db";
 import type { GeoFence } from "@/lib/attendance/geofence";
 import { DEFAULT_TIMEZONE, WEEKDAY_INDEXES } from "@/lib/attendance/time";
 
@@ -31,38 +38,48 @@ const FALLBACK_SCHEDULE: EffectiveSchedule = {
   isOrganizationDefault: true,
 };
 
-export const SETTINGS_ID = 1;
+async function getScheduleById(id: string): Promise<WorkSchedule | null> {
+  const snapshot = await firestore.collection(COLLECTIONS.schedules).doc(id).get();
+  return snapshot.exists ? toWorkSchedule(snapshot.id, snapshot.data() ?? {}) : null;
+}
+
+async function readSettings() {
+  const snapshot = await firestore
+    .collection(COLLECTIONS.settings)
+    .doc(SETTINGS_DOC_ID)
+    .get();
+  return snapshot.exists ? toSetting(snapshot.id, snapshot.data() ?? {}) : null;
+}
 
 /**
  * The organization's schedule for a user: their own assignment if present,
  * otherwise the organization default, otherwise a hardcoded fallback so the
- * app still functions on a freshly migrated database.
+ * app still functions on a freshly seeded database.
  */
 export const getEffectiveSchedule = cache(async (userId: string): Promise<EffectiveSchedule> => {
-  const user = await db.user.findUnique({
-    where: { id: userId },
-    select: { schedule: true },
-  });
+  const userSnapshot = await firestore.collection(COLLECTIONS.users).doc(userId).get();
+  const scheduleId = userSnapshot.exists
+    ? (userSnapshot.data()?.scheduleId as string | undefined)
+    : undefined;
 
-  if (user?.schedule) {
-    return toEffectiveSchedule(user.schedule, false);
+  if (scheduleId) {
+    const schedule = await getScheduleById(scheduleId);
+    if (schedule) return toEffectiveSchedule(schedule, false);
   }
 
-  const setting = await db.setting.findUnique({
-    where: { id: SETTINGS_ID },
-    select: { defaultSchedule: true },
-  });
-
-  if (setting?.defaultSchedule) {
-    return toEffectiveSchedule(setting.defaultSchedule, true);
+  const setting = await readSettings();
+  if (setting?.defaultScheduleId) {
+    const schedule = await getScheduleById(setting.defaultScheduleId);
+    if (schedule) return toEffectiveSchedule(schedule, true);
   }
 
-  const anyDefault = await db.workSchedule.findFirst({
-    where: { isOrganizationDefault: true, isActive: true },
-    orderBy: { createdAt: "asc" },
-  });
+  const snapshot = await firestore.collection(COLLECTIONS.schedules).get();
+  const schedules = snapshot.docs
+    .map((doc) => toWorkSchedule(doc.id, doc.data()))
+    .filter((schedule) => schedule.isOrganizationDefault && schedule.isActive)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
-  return anyDefault ? toEffectiveSchedule(anyDefault, true) : FALLBACK_SCHEDULE;
+  return schedules[0] ? toEffectiveSchedule(schedules[0], true) : FALLBACK_SCHEDULE;
 });
 
 function toEffectiveSchedule(
@@ -90,9 +107,9 @@ export interface LocationPolicy {
   workingDays: readonly number[];
 }
 
-/** Reads the singleton settings row, falling back to documented defaults. */
+/** Reads the singleton settings document, falling back to documented defaults. */
 export const getLocationPolicy = cache(async (): Promise<LocationPolicy> => {
-  const setting = await db.setting.findUnique({ where: { id: SETTINGS_ID } });
+  const setting = await readSettings();
   return {
     organizationName: setting?.organizationName ?? "Universal Attendance",
     timezone: setting?.timezone ?? DEFAULT_TIMEZONE,
@@ -102,38 +119,81 @@ export const getLocationPolicy = cache(async (): Promise<LocationPolicy> => {
 });
 
 export const getSettings = cache(async () => {
-  const existing = await db.setting.findUnique({ where: { id: SETTINGS_ID } });
+  const existing = await readSettings();
   if (existing) return existing;
-  // Created lazily so a migrated-but-unseeded database is still usable.
-  return db.setting.create({ data: { id: SETTINGS_ID } });
+
+  // Created lazily so a freshly created Firestore project is still usable.
+  const now = new Date();
+  await firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID).set({
+    organizationName: "Universal Attendance",
+    timezone: DEFAULT_TIMEZONE,
+    defaultScheduleId: null,
+    requireLocationValidation: false,
+    updatedAt: now,
+  });
+  return {
+    id: SETTINGS_DOC_ID,
+    organizationName: "Universal Attendance",
+    timezone: DEFAULT_TIMEZONE,
+    defaultScheduleId: null,
+    requireLocationValidation: false,
+    updatedAt: now,
+  };
 });
 
 export async function getActiveFences(): Promise<GeoFence[]> {
-  const locations = await db.workLocation.findMany({
-    where: { isActive: true },
-    select: { name: true, latitude: true, longitude: true, radiusMeters: true },
-  });
-  return locations;
+  const snapshot = await firestore.collection(COLLECTIONS.locations).get();
+  return snapshot.docs
+    .map((doc) => toWorkLocation(doc.id, doc.data()))
+    .filter((location) => location.isActive)
+    .map(({ name, latitude, longitude, radiusMeters }) => ({
+      name,
+      latitude,
+      longitude,
+      radiusMeters,
+    }));
 }
 
 export const getAllFences = cache(async (): Promise<WorkLocation[]> => {
-  return db.workLocation.findMany({ orderBy: { createdAt: "asc" } });
+  const snapshot = await firestore.collection(COLLECTIONS.locations).get();
+  return snapshot.docs
+    .map((doc) => toWorkLocation(doc.id, doc.data()))
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 });
 
 export type ScheduleWithUsage = WorkSchedule & { _count: { users: number } };
 
 export const getAllSchedules = cache(async (): Promise<ScheduleWithUsage[]> => {
-  return db.workSchedule.findMany({
-    orderBy: [{ isActive: "desc" }, { name: "asc" }],
-    include: { _count: { select: { users: true } } },
-  });
+  const [scheduleSnapshot, userSnapshot] = await Promise.all([
+    firestore.collection(COLLECTIONS.schedules).get(),
+    firestore.collection(COLLECTIONS.users).get(),
+  ]);
+
+  const usage = new Map<string, number>();
+  for (const doc of userSnapshot.docs) {
+    const scheduleId = doc.data().scheduleId;
+    if (typeof scheduleId === "string") {
+      usage.set(scheduleId, (usage.get(scheduleId) ?? 0) + 1);
+    }
+  }
+
+  return scheduleSnapshot.docs
+    .map((doc) => {
+      const schedule = toWorkSchedule(doc.id, doc.data());
+      return { ...schedule, _count: { users: usage.get(schedule.id) ?? 0 } };
+    })
+    .sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
+      return a.name.localeCompare(b.name, "id");
+    });
 });
 
 /** Options for employee pickers. */
 export const getActiveSchedules = cache(async () => {
-  return db.workSchedule.findMany({
-    where: { isActive: true },
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, startTime: true, endTime: true },
-  });
+  const snapshot = await firestore.collection(COLLECTIONS.schedules).get();
+  return snapshot.docs
+    .map((doc) => toWorkSchedule(doc.id, doc.data()))
+    .filter((schedule) => schedule.isActive)
+    .sort((a, b) => a.name.localeCompare(b.name, "id"))
+    .map(({ id, name, startTime, endTime }) => ({ id, name, startTime, endTime }));
 });

@@ -1,12 +1,12 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import type { Role } from "@/generated/prisma/enums";
-import { db } from "@/lib/db";
+import type { Role } from "@/lib/domain";
+import { COLLECTIONS, firestore, userFromSnapshot } from "@/lib/db";
 import { decryptSession, readSessionToken } from "@/lib/session";
 import { hasRole } from "@/lib/attendance/time";
 
-export type { Role } from "@/generated/prisma/enums";
+export type { Role } from "@/lib/domain";
 
 /**
  * Authentication / authorization Data Access Layer.
@@ -42,18 +42,45 @@ export class ForbiddenError extends Error {
   }
 }
 
-/** Columns safe to hand to any authenticated part of the app. */
-const currentUserSelect = {
-  id: true,
-  email: true,
-  name: true,
-  role: true,
-  department: true,
-  employeeCode: true,
-  phone: true,
-  scheduleId: true,
-  isActive: true,
-} as const;
+export class NotFoundError extends Error {
+  constructor(message = "Data tidak ditemukan.") {
+    super(message);
+    this.name = "NotFoundError";
+  }
+}
+
+function toCurrentUser(user: {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  department: string | null;
+  employeeCode: string | null;
+  phone: string | null;
+  scheduleId: string | null;
+  isActive: boolean;
+}): CurrentUser {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    department: user.department,
+    employeeCode: user.employeeCode,
+    phone: user.phone,
+    scheduleId: user.scheduleId,
+    isActive: user.isActive,
+  };
+}
+
+async function findUserById(id: string): Promise<CurrentUser | null> {
+  const snapshot = await firestore.collection(COLLECTIONS.users).doc(id).get();
+  const user = userFromSnapshot(snapshot);
+  // A missing, deactivated or otherwise invalid account is treated as signed
+  // out. This is what makes role changes take effect on the very next request.
+  if (!user || !user.isActive) return null;
+  return toCurrentUser(user);
+}
 
 /**
  * Resolves the signed-in user, or null when there is no usable session.
@@ -66,17 +93,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const token = await readSessionToken();
   const session = await decryptSession(token);
   if (!session) return null;
-
-  const user = await db.user.findUnique({
-    where: { id: session.sub },
-    select: currentUserSelect,
-  });
-
-  // A missing, deactivated or otherwise invalid account is treated as signed
-  // out. This is what makes role changes take effect on the very next request.
-  if (!user || !user.isActive) return null;
-
-  return user;
+  return findUserById(session.sub);
 });
 
 /** Same as `getCurrentUser` but never cached across mutations. */
@@ -84,9 +101,7 @@ export async function getCurrentUserUncached(): Promise<CurrentUser | null> {
   const token = await readSessionToken();
   const session = await decryptSession(token);
   if (!session) return null;
-  const user = await db.user.findUnique({ where: { id: session.sub }, select: currentUserSelect });
-  if (!user || !user.isActive) return null;
-  return user;
+  return findUserById(session.sub);
 }
 
 /** Redirects to the login page when signed out. Use in pages and layouts. */
@@ -123,14 +138,7 @@ export async function assertRole(role: Role): Promise<CurrentUser> {
  * this rather than `requireUser` so that a role change made moments ago shows up.
  */
 export async function requireActiveUserById(id: string): Promise<CurrentUser> {
-  const user = await db.user.findUnique({ where: { id }, select: currentUserSelect });
-  if (!user || !user.isActive) throw new NotFoundError("Karyawan tidak ditemukan.");
+  const user = await findUserById(id);
+  if (!user) throw new NotFoundError("Karyawan tidak ditemukan.");
   return user;
-}
-
-export class NotFoundError extends Error {
-  constructor(message = "Data tidak ditemukan.") {
-    super(message);
-    this.name = "NotFoundError";
-  }
 }

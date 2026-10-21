@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { STATUS_DESCRIPTOR } from "@/lib/attendance/time";
-import type { AttendanceStatus } from "@/generated/prisma/enums";
+import type { AttendanceStatus } from "@/lib/domain";
 
 const STATUS_OPTIONS: Array<{ value: AttendanceStatus | "ALL"; label: string }> = [
   { value: "ALL", label: "Semua status" },

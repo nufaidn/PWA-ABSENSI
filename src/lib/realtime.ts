@@ -1,152 +1,121 @@
 import "server-only";
-import { Client } from "pg";
+import { COLLECTIONS, REALTIME_DOC_ID, firestore } from "@/lib/db";
 
 /**
- * Realtime attendance notifications over Postgres LISTEN/NOTIFY.
+ * Realtime attendance notifications over a single Firestore document.
  *
- * Why not an in-memory event bus: on Vercel every Server Action and Route
- * Handler may run in a *different* serverless instance with its own heap, so a
- * module-level `EventEmitter` silently drops every event in production while
- * working perfectly in local dev. Routing the signal through Postgres means the
- * notification is seen by whichever instance holds the listener.
+ * The browser never talks to Firestore. A check-in writes a small "something
+ * changed" document through the Admin SDK; each SSE connection polls that one
+ * document and re-fetches through the normal authenticated Server Component
+ * path. The payload carries no PII by construction: no name, no email, no
+ * coordinates.
  *
- * Why not Supabase Realtime / Postgres Changes: those subscribe from the browser
- * with the `anon` key, which requires RLS policies that would expose attendance
- * rows to any client holding the publishable key. This keeps the existing
- * boundary intact — see `docs/architecture.md` §4 — because the browser only ever
- * receives an opaque "something changed" signal and re-fetches through the
- * normal authenticated Server Component path.
- *
- * The payload therefore carries no PII by construction: no name, no email, no
- * coordinates. A client reacts by calling `router.refresh()`, which re-renders
- * through the Server Components that already enforce authorization.
+ * The Admin SDK does not expose `onSnapshot`, so the server polls. At one read
+ * per connection every 10 seconds this stays well inside the Firestore free
+ * tier for a small organisation, and it avoids shipping a Firebase client key
+ * and public security rules just to get a refresh signal.
  */
 
-const CHANNEL = "attendance_events";
+const POLL_MS = 10_000;
 
-/** Payload limit for a single NOTIFY is 8000 bytes; we use a fraction of it. */
 export interface AttendanceEvent {
   /** `check-in` | `check-out` | `admin` — which subsystem invalidated. */
   type: "check-in" | "check-out" | "admin";
   /** Server timestamp, used only to discard out-of-order or stale events. */
   at: string;
+  /** Opaque version, so two events in the same millisecond are still distinct. */
+  id?: string;
 }
 
-declare global {
-  var __attendanceRealtime: ReturnType<typeof connect> | undefined;
-}
-
-let publisher: Client | null = null;
-let publisherReady: Promise<Client> | null = null;
-
-function connect(): Client {
-  const client = new Client({
-    connectionString: process.env.DATABASE_URL,
-    // Supabase and most hosted providers terminate TLS; Prisma is configured for
-    // this separately, but the raw pg client needs to be told explicitly.
-    ssl: process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false },
-  });
-
-  // A pooled or idle connection can be dropped by the provider at any time. The
-  // `error` handler keeps Node from treating that as an unhandled 'error' event,
-  // which would crash the process; the next publish reconnects lazily.
-  client.on("error", () => {
-    publisherReady = null;
-    publisher = null;
-  });
-
-  return client;
-}
-
-async function getPublisher(): Promise<Client> {
-  if (publisher) return publisher;
-  if (!publisherReady) {
-    const client = connect();
-    publisherReady = client
-      .connect()
-      .then(() => {
-        publisher = client;
-        globalThis.__attendanceRealtime = client;
-        return client;
-      })
-      .catch((error: unknown) => {
-        publisherReady = null;
-        throw error;
-      });
-  }
-  return publisherReady;
+function isEventType(value: unknown): value is AttendanceEvent["type"] {
+  return value === "check-in" || value === "check-out" || value === "admin";
 }
 
 /**
  * Announces that attendance data changed.
  *
- * Never throws. Realtime is a progressive enhancement: if the notification fails
- * the UI still works, it just needs a manual refresh. Letting a notification
- * failure abort a check-in would turn an optional feature into an outage.
+ * Never throws. Realtime is a progressive enhancement: if the notification
+ * fails the UI still works, it just needs a manual refresh. Letting a
+ * notification failure abort a check-in would turn an optional feature into an
+ * outage.
  */
 export async function publishAttendanceEvent(
   type: AttendanceEvent["type"],
 ): Promise<void> {
-  const payload: AttendanceEvent = { type, at: new Date().toISOString() };
   try {
-    const client = await getPublisher();
-    await client.query("SELECT pg_notify($1, $2)", [CHANNEL, JSON.stringify(payload)]);
+    await firestore
+      .collection(COLLECTIONS.realtime)
+      .doc(REALTIME_DOC_ID)
+      .set({
+        type,
+        at: new Date().toISOString(),
+        id: crypto.randomUUID(),
+      });
   } catch (error) {
     console.warn("[realtime] publish failed; UI will require a manual refresh", error);
   }
 }
 
 /**
- * Subscribes to the channel and invokes `onEvent` for every notification.
- * Returns an unsubscribe function that also tears the connection down.
- *
- * Each SSE client needs its own LISTEN: Postgres notifications are delivered per
- * session, not per subscriber, so connections are not shareable between
- * requests. Callers must invoke the returned disposer on disconnect to avoid
- * leaking sessions back to the database.
+ * Polls the signal document and invokes `onEvent` whenever its version changes.
+ * Returns an async disposer; callers must invoke it when the SSE client leaves.
  */
 export async function subscribeToAttendanceEvents(
   onEvent: (event: AttendanceEvent) => void,
   onError?: (error: unknown) => void,
 ): Promise<() => Promise<void>> {
-  const client = connect();
-  await client.connect();
+  const ref = firestore.collection(COLLECTIONS.realtime).doc(REALTIME_DOC_ID);
+  let closed = false;
+  let lastId: string | null = null;
+  let running = false;
 
-  // A notification larger than this, or one carrying an unexpected shape, is
-  // ignored rather than passed to the client verbatim.
-  client.on("notification", (message) => {
-    if (message.channel !== CHANNEL || !message.payload) return;
-    try {
-      const parsed = JSON.parse(message.payload) as AttendanceEvent;
-      if (parsed.type === "check-in" || parsed.type === "check-out" || parsed.type === "admin") {
-        onEvent({ type: parsed.type, at: parsed.at ?? new Date().toISOString() });
-      }
-    } catch {
-      // Malformed payload: nothing to do, and nothing worth surfacing.
-    }
-  });
-
-  client.on("error", (error: unknown) => {
+  // Establish the current version without emitting: a client that just
+  // connected should not immediately refresh because an old event is present.
+  try {
+    const snapshot = await ref.get();
+    const data = snapshot.data();
+    if (data && typeof data.id === "string") lastId = data.id;
+  } catch (error) {
     onError?.(error);
-  });
+  }
 
-  await client.query(`LISTEN ${CHANNEL}`);
+  const poll = async () => {
+    if (closed || running) return;
+    running = true;
+    try {
+      const snapshot = await ref.get();
+      if (!snapshot.exists || closed) return;
+      const data = snapshot.data();
+      if (!data || !isEventType(data.type)) return;
+      const id = typeof data.id === "string" ? data.id : null;
+      if (id && id === lastId) return;
+      lastId = id;
+      onEvent({
+        type: data.type,
+        at: typeof data.at === "string" ? data.at : new Date().toISOString(),
+        ...(id ? { id } : {}),
+      });
+    } catch (error) {
+      onError?.(error);
+    } finally {
+      running = false;
+    }
+  };
+
+  const timer = setInterval(() => {
+    void poll();
+  }, POLL_MS);
 
   return async () => {
-    try {
-      await client.query(`UNLISTEN ${CHANNEL}`);
-    } catch {
-      // Already gone; the close below is what matters.
-    }
-    await client.end().catch(() => {});
+    closed = true;
+    clearInterval(timer);
   };
 }
 
-/** Closes the shared publisher. Used by tests and graceful shutdown. */
+/**
+ * Retained for callers that used to close a shared Postgres publisher. The
+ * Firestore Admin SDK manages its own transport, so there is nothing to close.
+ */
 export async function closeAttendanceRealtime(): Promise<void> {
-  const client = publisher ?? globalThis.__attendanceRealtime;
-  publisher = null;
-  publisherReady = null;
-  globalThis.__attendanceRealtime = undefined;
-  if (client) await client.end().catch(() => {});
+  // No-op.
 }

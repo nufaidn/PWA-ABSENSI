@@ -1,59 +1,199 @@
 import "server-only";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
+import { Timestamp, type DocumentData, type DocumentSnapshot } from "firebase-admin/firestore";
+import { firestore } from "@/lib/firebase-config";
+import {
+  AuditAction,
+  AttendanceStatus,
+  Role,
+  isAttendanceStatus,
+  isAuditAction,
+  isRole,
+  type Attendance,
+  type AuditLog,
+  type Setting,
+  type User,
+  type WorkLocation,
+  type WorkSchedule,
+} from "@/lib/domain";
 
 /**
- * Prisma 7 requires an explicit driver adapter; the client no longer bundles
- * its own Rust-based connection layer.
+ * Firestore Admin SDK entry point for the application.
  *
- * A single instance is cached on `globalThis` so Next.js hot reloads in
- * development do not exhaust the PostgreSQL connection pool.
+ * The browser never talks to Firestore directly. Every read and write goes
+ * through Server Components, Server Actions or Route Handlers using the
+ * service-account client in `firebase-config.ts`, so Firestore security rules
+ * can deny all client access and no Firebase key is ever shipped to the browser.
  */
-const globalForPrisma = globalThis as unknown as {
-  prisma?: PrismaClient;
-};
 
-/**
- * Supabase's session pooler allows only 15 clients for the whole project, while
- * `pg` defaults to 10 per pool. On Vercel every warm function instance owns its
- * own pool, so two instances are enough to hit that ceiling — the
- * `EMAXCONNSESSION` failure this setting prevents. Production therefore keeps
- * one connection per instance; development can afford a few more because there
- * is only a single server process.
- *
- * Override with `DATABASE_POOL_MAX` when moving to a transaction pooler or a
- * database with a larger connection budget.
- */
-function resolvePoolMax(): number {
-  const configured = Number(process.env.DATABASE_POOL_MAX);
-  if (Number.isFinite(configured) && configured >= 1) return Math.floor(configured);
-  return process.env.NODE_ENV === "production" ? 1 : 3;
+export const COLLECTIONS = {
+  users: "users",
+  schedules: "schedules",
+  locations: "locations",
+  settings: "settings",
+  attendance: "attendance",
+  auditLogs: "auditLogs",
+  employeeCodes: "employeeCodes",
+  userEmails: "userEmails",
+  counters: "counters",
+  realtime: "realtime",
+} as const;
+
+export const SETTINGS_DOC_ID = "organization";
+export const REALTIME_DOC_ID = "attendance";
+
+export { firestore };
+
+export function attendanceDocId(userId: string, workDate: string): string {
+  return `${userId}_${workDate}`;
 }
 
-function createClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error(
-      "DATABASE_URL is not set. Copy .env.example to .env and configure the database.",
-    );
+function toDate(value: unknown): Date | null {
+  if (value instanceof Timestamp) return value.toDate();
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
   }
-  const adapter = new PrismaPg({
-    connectionString,
-    max: resolvePoolMax(),
-    // Fail with a clear pool timeout instead of hanging forever when every
-    // server-side connection is in use.
-    connectionTimeoutMillis: 10_000,
-  });
-  return new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-  });
+  if (typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
 }
 
-export const db = globalForPrisma.prisma ?? createClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = db;
+function dateOr(value: unknown, fallback = new Date(0)): Date {
+  return toDate(value) ?? fallback;
 }
 
-export type { PrismaClient } from "@/generated/prisma/client";
+function nullableString(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function stringOr(value: unknown, fallback = ""): string {
+  return typeof value === "string" ? value : fallback;
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function numberOr(value: unknown, fallback = 0): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function booleanOr(value: unknown, fallback = false): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function workDateKey(value: unknown): string {
+  if (typeof value === "string") return value.slice(0, 10);
+  const date = toDate(value);
+  return date ? date.toISOString().slice(0, 10) : "";
+}
+
+export function toUser(id: string, data: DocumentData): User {
+  return {
+    id,
+    email: stringOr(data.email),
+    passwordHash: stringOr(data.passwordHash),
+    name: stringOr(data.name),
+    employeeCode: nullableString(data.employeeCode),
+    role: isRole(data.role) ? data.role : Role.EMPLOYEE,
+    department: nullableString(data.department),
+    phone: nullableString(data.phone),
+    isActive: data.isActive !== false,
+    scheduleId: nullableString(data.scheduleId),
+    createdAt: dateOr(data.createdAt),
+    updatedAt: dateOr(data.updatedAt),
+  };
+}
+
+export function toWorkSchedule(id: string, data: DocumentData): WorkSchedule {
+  return {
+    id,
+    name: stringOr(data.name),
+    description: nullableString(data.description),
+    startTime: stringOr(data.startTime, "09:00"),
+    endTime: stringOr(data.endTime, "18:00"),
+    lateToleranceMinutes: numberOr(data.lateToleranceMinutes),
+    breakMinutes: numberOr(data.breakMinutes, 60),
+    isActive: data.isActive !== false,
+    isOrganizationDefault: booleanOr(data.isOrganizationDefault),
+    createdAt: dateOr(data.createdAt),
+    updatedAt: dateOr(data.updatedAt),
+  };
+}
+
+export function toAttendance(id: string, data: DocumentData): Attendance {
+  return {
+    id,
+    userId: stringOr(data.userId),
+    workDate: workDateKey(data.workDate),
+    checkInAt: toDate(data.checkInAt),
+    checkOutAt: toDate(data.checkOutAt),
+    checkInLatitude: numberOrNull(data.checkInLatitude),
+    checkInLongitude: numberOrNull(data.checkInLongitude),
+    checkInDistanceM: numberOrNull(data.checkInDistanceM),
+    checkOutLatitude: numberOrNull(data.checkOutLatitude),
+    checkOutLongitude: numberOrNull(data.checkOutLongitude),
+    checkOutDistanceM: numberOrNull(data.checkOutDistanceM),
+    status: isAttendanceStatus(data.status) ? data.status : AttendanceStatus.PRESENT,
+    lateMinutes: numberOr(data.lateMinutes),
+    workedMinutes: numberOr(data.workedMinutes),
+    outsideRadius: booleanOr(data.outsideRadius),
+    notes: nullableString(data.notes),
+    createdAt: dateOr(data.createdAt),
+    updatedAt: dateOr(data.updatedAt),
+  };
+}
+
+export function toWorkLocation(id: string, data: DocumentData): WorkLocation {
+  return {
+    id,
+    name: stringOr(data.name),
+    address: nullableString(data.address),
+    latitude: numberOr(data.latitude),
+    longitude: numberOr(data.longitude),
+    radiusMeters: numberOr(data.radiusMeters, 200),
+    isActive: data.isActive !== false,
+    createdAt: dateOr(data.createdAt),
+    updatedAt: dateOr(data.updatedAt),
+  };
+}
+
+export function toSetting(id: string, data: DocumentData): Setting {
+  return {
+    id,
+    organizationName: stringOr(data.organizationName, "Universal Attendance"),
+    timezone: stringOr(data.timezone, "Asia/Jakarta"),
+    defaultScheduleId: nullableString(data.defaultScheduleId),
+    requireLocationValidation: booleanOr(data.requireLocationValidation),
+    updatedAt: dateOr(data.updatedAt),
+  };
+}
+
+export function toAuditLog(id: string, data: DocumentData): AuditLog {
+  return {
+    id,
+    actorId: nullableString(data.actorId),
+    actorName: nullableString(data.actorName),
+    actorEmail: nullableString(data.actorEmail),
+    action: isAuditAction(data.action) ? data.action : AuditAction.SETTINGS_UPDATED,
+    entityType: stringOr(data.entityType),
+    entityId: nullableString(data.entityId),
+    summary: stringOr(data.summary),
+    metadata:
+      data.metadata && typeof data.metadata === "object"
+        ? (data.metadata as Record<string, unknown>)
+        : null,
+    ipAddress: nullableString(data.ipAddress),
+    createdAt: dateOr(data.createdAt),
+  };
+}
+
+export function userFromSnapshot(snapshot: DocumentSnapshot): User | null {
+  if (!snapshot.exists) return null;
+  return toUser(snapshot.id, snapshot.data() ?? {});
+}
+
+export { Timestamp };

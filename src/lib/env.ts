@@ -20,10 +20,6 @@ function required(name: string): string {
   return value;
 }
 
-export function getDatabaseUrl(): string {
-  return required("DATABASE_URL");
-}
-
 export function getAuthSecret(): string {
   const secret = required("AUTH_SECRET");
   // HS256 needs at least 256 bits of key material.

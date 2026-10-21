@@ -1,93 +1,101 @@
-import { Client } from "pg";
 import "dotenv/config";
+import { firestore } from "../src/lib/firebase-config";
 
 /**
  * Removes the seeded demo schedules and geo-fence locations.
  *
- * Those rows carry fictional office coordinates. The intent is for the
+ * Those documents carry fictional office coordinates. The intent is for the
  * administrator to define their own real locations, and a plausible-looking fake
  * one is worse than none: it silently accepts check-ins in the wrong place.
  *
- * Touches only `work_schedules` and `work_locations`. Accounts, attendance and
- * the settings row are left alone.
+ * Touches only `schedules` and `locations`. Accounts, attendance and the settings
+ * document are left alone.
  *
  *   npm run db:purge-reference          (dry run)
  *   npm run db:purge-reference -- --apply
  */
 
-/** Wrapped in main(): the project is CommonJS, so tsx rejects top-level await. */
+const COLLECTIONS = {
+  schedules: "schedules",
+  locations: "locations",
+  users: "users",
+  settings: "settings",
+} as const;
+
+const SETTINGS_DOC_ID = "organization";
+
 async function main(): Promise<void> {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL is not set.");
-
   const apply = process.argv.includes("--apply");
-  const ssl = process.env.DATABASE_SSL === "disable" ? false : { rejectUnauthorized: false };
-  const client = new Client({ connectionString: url, ssl });
-  await client.connect();
 
-  const schemaResult = await client.query<{ current_schema: string }>("select current_schema()");
-  if (schemaResult.rows[0]?.current_schema !== "public") {
+  const [schedules, locations, users] = await Promise.all([
+    firestore.collection(COLLECTIONS.schedules).get(),
+    firestore.collection(COLLECTIONS.locations).get(),
+    firestore.collection(COLLECTIONS.users).get(),
+  ]);
+
+  const usage = new Map<string, number>();
+  for (const doc of users.docs) {
+    const scheduleId = doc.data().scheduleId;
+    if (typeof scheduleId === "string") {
+      usage.set(scheduleId, (usage.get(scheduleId) ?? 0) + 1);
+    }
+  }
+
+  console.log(`SCHEDULES (${schedules.size}):`);
+  for (const doc of schedules.docs) {
+    const data = doc.data();
+    const inUse = usage.get(doc.id) ?? 0;
     console.log(
-      `Connected to schema "${schemaResult.rows[0]?.current_schema}" (expected "public"). Refusing.`,
+      `  ${data.name}${data.isOrganizationDefault ? " [default organisasi]" : ""}${
+        inUse > 0 ? ` — dipakai ${inUse} karyawan` : ""
+      }`,
     );
-    await client.end();
-    process.exitCode = 1;
-    return;
   }
 
-  // A schedule still assigned to an employee cannot be deleted — the foreign key
-  // is ON DELETE RESTRICT. Report that rather than letting the delete fail later.
-  const schedules = await client.query<{ id: string; name: string; in_use: number; is_default: boolean }>(
-    `select s.id, s.name, s."isOrganizationDefault" as is_default,
-            (select count(*) from users u where u."scheduleId" = s.id)::int as in_use
-       from work_schedules s
-      order by s.name`,
-  );
-  const locations = await client.query<{ id: string; name: string; lat: number; lng: number; radius: number }>(
-    `select id, name, latitude as lat, longitude as lng, "radiusMeters" as radius
-       from work_locations order by name`,
-  );
-
-  console.log(`SCHEDULES (${schedules.rowCount}):`);
-  for (const s of schedules.rows) {
-    console.log(`  ${s.name}${s.is_default ? " [default organisasi]" : ""}${s.in_use > 0 ? ` — dipakai ${s.in_use} karyawan` : ""}`);
-  }
-  console.log(`\nLOCATIONS (${locations.rowCount}):`);
-  for (const l of locations.rows) {
-    console.log(`  ${l.name}  ${l.lat}, ${l.lng}  r=${l.radius}m`);
+  console.log(`\nLOCATIONS (${locations.size}):`);
+  for (const doc of locations.docs) {
+    const data = doc.data();
+    console.log(`  ${data.name}  ${data.latitude}, ${data.longitude}  r=${data.radiusMeters}m`);
   }
 
-  const blocked = schedules.rows.filter((s) => s.in_use > 0);
+  const blocked = schedules.docs.filter((doc) => (usage.get(doc.id) ?? 0) > 0);
   if (blocked.length > 0) {
     console.log(
       `\nRefusing: ${blocked.length} schedule(s) are still assigned to an employee. Detach them first.`,
     );
-    await client.end();
     process.exitCode = 1;
     return;
   }
 
   if (!apply) {
     console.log("\nDry run — nothing was changed. Re-run with --apply.");
-    await client.end();
     return;
   }
 
-  await client.query("begin");
-  try {
-    // `Setting.defaultScheduleId` is ON DELETE SET NULL, but clearing it first
-    // keeps the "organisation default schedule" dropdown honest either way.
-    await client.query(`update settings set "defaultScheduleId" = null where "defaultScheduleId" is not null`);
-    await client.query(`delete from work_locations`);
-    await client.query(`delete from work_schedules`);
-    await client.query("commit");
-    console.log("\nRemoved. Admin can now create their own schedules and locations.");
-  } catch (error) {
-    await client.query("rollback");
-    throw error;
+  await firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID).set(
+    { defaultScheduleId: null, updatedAt: new Date() },
+    { merge: true },
+  );
+
+  for (let offset = 0; offset < locations.size; offset += 400) {
+    const batch = firestore.batch();
+    for (const doc of locations.docs.slice(offset, offset + 400)) batch.delete(doc.ref);
+    await batch.commit();
+  }
+  for (let offset = 0; offset < schedules.size; offset += 400) {
+    const batch = firestore.batch();
+    for (const doc of schedules.docs.slice(offset, offset + 400)) batch.delete(doc.ref);
+    await batch.commit();
   }
 
-  await client.end();
+  console.log("\nRemoved. Admin can now create their own schedules and locations.");
 }
 
-void main();
+main()
+  .catch((error) => {
+    console.error("\nPurge failed:", error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await firestore.terminate();
+  });

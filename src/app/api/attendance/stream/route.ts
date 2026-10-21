@@ -5,10 +5,10 @@ import { subscribeToAttendanceEvents, type AttendanceEvent } from "@/lib/realtim
  * Server-Sent Events stream of attendance activity.
  *
  * Authorization is checked per connection using the app's own session cookie, so
- * this endpoint does not depend on Supabase's `anon` key and does not require
- * loosening RLS. The stream carries only opaque change signals — the browser
- * re-fetches the real data through Server Components that enforce authorization
- * on their own.
+ * this endpoint does not depend on a Firebase client key and does not require
+ * loosening Firestore rules. The stream carries only opaque change signals — the
+ * browser re-fetches the real data through Server Components that enforce
+ * authorization on their own.
  *
  * `EventSource` cannot send credentials cross-origin, but same-origin requests
  * do carry the session cookie automatically, which is the deployment shape here

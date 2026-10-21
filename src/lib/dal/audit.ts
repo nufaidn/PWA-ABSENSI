@@ -1,8 +1,8 @@
 import "server-only";
 import { cache } from "react";
-import type { AuditAction, Prisma } from "@/generated/prisma/client";
+import type { AuditAction } from "@/lib/domain";
+import { COLLECTIONS, firestore, toAuditLog } from "@/lib/db";
 import { headers } from "next/headers";
-import { db } from "@/lib/db";
 import { assertRole } from "./auth";
 
 /**
@@ -19,7 +19,7 @@ export interface AuditEntryInput {
   entityType: string;
   entityId?: string | null;
   summary: string;
-  metadata?: Prisma.InputJsonValue | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 /** Appends an audit entry. Never throws — logging must not break a mutation. */
@@ -36,16 +36,15 @@ export async function recordAudit(entry: AuditEntryInput): Promise<void> {
       // `headers()` is unavailable outside a request scope (e.g. in seed scripts).
     }
 
-    await db.auditLog.create({
-      data: {
-        actorId: entry.actorId,
-        action: entry.action,
-        entityType: entry.entityType,
-        entityId: entry.entityId ?? null,
-        summary: entry.summary,
-        metadata: entry.metadata ?? undefined,
-        ipAddress,
-      },
+    await firestore.collection(COLLECTIONS.auditLogs).add({
+      actorId: entry.actorId,
+      action: entry.action,
+      entityType: entry.entityType,
+      entityId: entry.entityId ?? null,
+      summary: entry.summary,
+      metadata: entry.metadata ?? null,
+      ipAddress,
+      createdAt: new Date(),
     });
   } catch (error) {
     console.error("[audit] failed to record entry", error);
@@ -69,6 +68,12 @@ export interface AuditPage {
   pageSize: number;
 }
 
+/**
+ * Firestore has no server-side join, so actor names are resolved from a users
+ * lookup after the log is read. The log is capped at the most recent 1,000
+ * entries: an audit screen that needs to page through more than that should
+ * move to a BigQuery export rather than paying for an unbounded read.
+ */
 export async function getAuditLog(options: {
   page?: number;
   pageSize?: number;
@@ -80,38 +85,56 @@ export async function getAuditLog(options: {
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(100, Math.max(10, options.pageSize ?? 20));
 
-  const where: Prisma.AuditLogWhereInput = {
-    ...(options.action && options.action !== "ALL" ? { action: options.action } : {}),
-    ...(options.search
-      ? {
-          OR: [
-            { summary: { contains: options.search, mode: "insensitive" } },
-            { entityType: { contains: options.search, mode: "insensitive" } },
-            { actor: { name: { contains: options.search, mode: "insensitive" } } },
-          ],
-        }
-      : {}),
-  };
+  const snapshot = await firestore
+    .collection(COLLECTIONS.auditLogs)
+    .orderBy("createdAt", "desc")
+    .limit(1000)
+    .get();
 
-  const [total, rows] = await Promise.all([
-    db.auditLog.count({ where }),
-    db.auditLog.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      select: {
-        id: true,
-        action: true,
-        entityType: true,
-        entityId: true,
-        summary: true,
-        ipAddress: true,
-        createdAt: true,
-        actor: { select: { name: true, email: true } },
-      },
+  const logs = snapshot.docs.map((doc) => toAuditLog(doc.id, doc.data()));
+
+  const actorIds = [...new Set(logs.map((log) => log.actorId).filter(Boolean))] as string[];
+  const actors = new Map<string, { name: string; email: string }>();
+  await Promise.all(
+    actorIds.map(async (id) => {
+      const user = await firestore.collection(COLLECTIONS.users).doc(id).get();
+      if (user.exists) {
+        const data = user.data() ?? {};
+        actors.set(id, {
+          name: typeof data.name === "string" ? data.name : "",
+          email: typeof data.email === "string" ? data.email : "",
+        });
+      }
     }),
-  ]);
+  );
+
+  const search = options.search?.trim().toLowerCase();
+  const filtered = logs.filter((log) => {
+    if (options.action && options.action !== "ALL" && log.action !== options.action) {
+      return false;
+    }
+    if (!search) return true;
+    const actor = log.actorId ? actors.get(log.actorId) : undefined;
+    return (
+      log.summary.toLowerCase().includes(search) ||
+      log.entityType.toLowerCase().includes(search) ||
+      (actor?.name.toLowerCase().includes(search) ?? false) ||
+      (actor?.email.toLowerCase().includes(search) ?? false)
+    );
+  });
+
+  const total = filtered.length;
+  const start = (page - 1) * pageSize;
+  const rows = filtered.slice(start, start + pageSize).map((log) => ({
+    id: log.id,
+    action: log.action,
+    entityType: log.entityType,
+    entityId: log.entityId,
+    summary: log.summary,
+    ipAddress: log.ipAddress,
+    createdAt: log.createdAt,
+    actor: log.actorId ? actors.get(log.actorId) ?? null : null,
+  }));
 
   return {
     rows,
@@ -123,8 +146,13 @@ export async function getAuditLog(options: {
 }
 
 export const getAuditActions = cache(async (): Promise<AuditAction[]> => {
-  const rows = await db.auditLog.groupBy({ by: ["action"] });
-  return rows.map((r) => r.action);
+  const snapshot = await firestore.collection(COLLECTIONS.auditLogs).limit(1000).get();
+  const actions = new Set<AuditAction>();
+  for (const doc of snapshot.docs) {
+    const action = doc.data().action;
+    if (typeof action === "string") actions.add(action as AuditAction);
+  }
+  return [...actions];
 });
 
 export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {

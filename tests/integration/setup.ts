@@ -1,64 +1,286 @@
 import { beforeEach, vi } from "vitest";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { PrismaClient } from "@/generated/prisma/client";
-import { sslFor, testDatabaseUrl, TEST_SCHEMA } from "./env";
+import {
+  COLLECTIONS,
+  SETTINGS_DOC_ID,
+  attendanceDocId,
+  firestore,
+  toAttendance,
+  toSetting,
+  toUser,
+  toWorkLocation,
+  toWorkSchedule,
+} from "@/lib/db";
+import type { Attendance } from "@/lib/domain";
 
 /**
  * Per-suite wiring for integration tests.
  *
- * Only the *identity* and the *connection* are faked. `assertUser()` is replaced
- * with a fixture user so the DAL can run outside a request cycle, and `@/lib/db`
- * is pointed at the throwaway schema. Everything below those — the queries, the
- * transactions, the `(userId, workDate)` unique constraint, the status
- * derivation — is the real thing talking to a real PostgreSQL, which is the only
- * way to prove the guarantees in `docs/architecture.md` §3.
+ * Only the identity is faked. `assertUser()` is replaced with a fixture user so
+ * the DAL can run outside a request cycle. Everything else — the Firestore
+ * transactions, the `${userId}_${workDate}` document id, the status derivation —
+ * is the real thing talking to the Firestore emulator, which is the only way to
+ * prove the guarantees in `docs/architecture.md` §3.
+ *
+ * The emulator is started by `npm run test:integration` via
+ * `firebase emulators:exec`, which exports `FIRESTORE_EMULATOR_HOST`.
  */
 
+const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+const projectId =
+  process.env.FIREBASE_PROJECT_ID ?? process.env.GCLOUD_PROJECT ?? "demo-attendance";
+
+type TestAttendance = Omit<Attendance, "workDate"> & { workDate: Date };
+
+function assertEmulator(): string {
+  if (!emulatorHost) {
+    throw new Error(
+      "FIRESTORE_EMULATOR_HOST is not set. Run integration tests with `npm run test:integration`.",
+    );
+  }
+  return emulatorHost.replace(/^https?:\/\//, "");
+}
+
+function workDateKey(value: unknown): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "string") return value.slice(0, 10);
+  throw new Error(`Invalid workDate: ${String(value)}`);
+}
+
+function toTestAttendance(id: string, data: FirebaseFirestore.DocumentData): TestAttendance {
+  const record = toAttendance(id, data);
+  return { ...record, workDate: new Date(`${record.workDate}T00:00:00.000Z`) };
+}
+
+function attendanceRef(where: {
+  id?: string;
+  userId_workDate?: { userId: string; workDate: Date | string };
+}) {
+  if (where.id) {
+    return firestore.collection(COLLECTIONS.attendance).doc(where.id);
+  }
+  if (where.userId_workDate) {
+    return firestore
+      .collection(COLLECTIONS.attendance)
+      .doc(
+        attendanceDocId(
+          where.userId_workDate.userId,
+          workDateKey(where.userId_workDate.workDate),
+        ),
+      );
+  }
+  throw new Error("Unsupported attendance where clause");
+}
+
+function matchesWhere(
+  row: TestAttendance,
+  where: {
+    userId?: string;
+    workDate?: Date | string | { gte?: Date | string; lte?: Date | string };
+    status?: string;
+  },
+): boolean {
+  if (where.userId && row.userId !== where.userId) return false;
+  if (where.status && row.status !== where.status) return false;
+  if (where.workDate) {
+    const key = row.workDate.toISOString().slice(0, 10);
+    if (where.workDate instanceof Date || typeof where.workDate === "string") {
+      if (key !== workDateKey(where.workDate)) return false;
+    } else {
+      if (where.workDate.gte && key < workDateKey(where.workDate.gte)) return false;
+      if (where.workDate.lte && key > workDateKey(where.workDate.lte)) return false;
+    }
+  }
+  return true;
+}
+
 /**
- * Prisma bound to the throwaway schema, not to whatever DATABASE_URL points at.
- *
- * Two independent settings are required, and neither implies the other — each was
- * verified against a live database, and getting one wrong leaks the run into the
- * development schema:
- *
- *  - `schema` on the adapter is what Prisma qualifies its *generated* statements
- *    with. Under Prisma 7's driver adapter the `?schema=` query parameter is
- *    ignored here; with it absent Prisma defaults to `public` and every
- *    `db.model.create()` lands in the development tables even while the pool is
- *    pointed elsewhere.
- *  - `search_path` in the connection `options` is what *unqualified* SQL resolves
- *    against (`resetDatabase`'s TRUNCATE, `current_schema()`).
- *
- * `ssl` is set explicitly because the URL carries no `sslmode` (see env.ts).
+ * A deliberately tiny subset of the Prisma client used by the integration
+ * tests. It talks to the same Firestore collections as the DAL, so the tests
+ * exercise the real data layer instead of a mock.
  */
-export const db = new PrismaClient({
-  adapter: new PrismaPg(
-    {
-      connectionString: testDatabaseUrl(),
-      ssl: sslFor(),
-      // Vitest runs the integration files in parallel. The `pg` default of 10
-      // clients per file multiplied by three files is enough to exhaust
-      // Supabase's 15-client session pooler, so each suite gets a small pool.
-      max: 2,
-      connectionTimeoutMillis: 10_000,
+export const db = {
+  attendance: {
+    async findUnique({
+      where,
+    }: {
+      where: { id?: string; userId_workDate?: { userId: string; workDate: Date | string } };
+    }) {
+      const snapshot = await attendanceRef(where).get();
+      return snapshot.exists ? toTestAttendance(snapshot.id, snapshot.data() ?? {}) : null;
     },
-    { schema: TEST_SCHEMA },
-  ),
-});
 
-/**
- * The DAL imports the client from `@/lib/db`, which builds its own connection
- * from `process.env.DATABASE_URL` at import time.
- *
- * Without this mock the DAL would run against the *development* schema while the
- * fixtures above wrote to the test schema — so `resetDatabase()`'s TRUNCATE would
- * hit the developer's real attendance rows. That is not hypothetical: it is
- * exactly what happened the first time this suite ran.
- */
-vi.mock("@/lib/db", () => ({ db, serverDb: db }));
+    async findFirst() {
+      const snapshot = await firestore.collection(COLLECTIONS.attendance).limit(1).get();
+      const doc = snapshot.docs[0];
+      return doc ? toTestAttendance(doc.id, doc.data()) : null;
+    },
 
-/** Row id used by the schema-leak probe in `resetDatabase`. */
-const SCHEMA_PROBE_ID = "schema-probe-id";
+    async count(args?: {
+      where?: {
+        userId?: string;
+        workDate?: Date | string | { gte?: Date | string; lte?: Date | string };
+        status?: string;
+      };
+    }) {
+      if (!args?.where) {
+        const snapshot = await firestore.collection(COLLECTIONS.attendance).count().get();
+        return snapshot.data().count;
+      }
+      const snapshot = await firestore.collection(COLLECTIONS.attendance).get();
+      return snapshot.docs
+        .map((doc) => toTestAttendance(doc.id, doc.data()))
+        .filter((row) => matchesWhere(row, args.where!)).length;
+    },
+
+    async create({ data }: { data: Record<string, unknown> }) {
+      const userId = String(data.userId);
+      const key = workDateKey(data.workDate);
+      const ref = firestore
+        .collection(COLLECTIONS.attendance)
+        .doc(attendanceDocId(userId, key));
+      const now = new Date();
+      await ref.create({
+        ...data,
+        userId,
+        workDate: key,
+        createdAt: data.createdAt ?? now,
+        updatedAt: now,
+      });
+      const snapshot = await ref.get();
+      return toTestAttendance(snapshot.id, snapshot.data() ?? {});
+    },
+
+    async update({
+      where,
+      data,
+    }: {
+      where: { id?: string; userId_workDate?: { userId: string; workDate: Date | string } };
+      data: Record<string, unknown>;
+    }) {
+      const ref = attendanceRef(where);
+      const payload = { ...data };
+      if (payload.workDate !== undefined) payload.workDate = workDateKey(payload.workDate);
+      await ref.update({ ...payload, updatedAt: new Date() });
+      const snapshot = await ref.get();
+      return toTestAttendance(snapshot.id, snapshot.data() ?? {});
+    },
+  },
+
+  user: {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const id = data.id ? String(data.id) : crypto.randomUUID();
+      const email = String(data.email).toLowerCase();
+      const now = new Date();
+      const payload = {
+        email,
+        passwordHash: data.passwordHash ?? "",
+        name: data.name ?? "",
+        employeeCode: data.employeeCode ?? null,
+        role: data.role ?? "EMPLOYEE",
+        department: data.department ?? null,
+        phone: data.phone ?? null,
+        isActive: data.isActive ?? true,
+        scheduleId: data.scheduleId ?? null,
+        createdAt: data.createdAt ?? now,
+        updatedAt: now,
+      };
+      const batch = firestore.batch();
+      batch.set(firestore.collection(COLLECTIONS.users).doc(id), payload);
+      batch.set(firestore.collection(COLLECTIONS.userEmails).doc(email), { userId: id });
+      if (payload.employeeCode) {
+        batch.set(
+          firestore.collection(COLLECTIONS.employeeCodes).doc(String(payload.employeeCode)),
+          { userId: id },
+        );
+      }
+      await batch.commit();
+      return toUser(id, payload);
+    },
+  },
+
+  workSchedule: {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const id = crypto.randomUUID();
+      const now = new Date();
+      const payload = {
+        name: data.name ?? "Shift",
+        description: data.description ?? null,
+        startTime: data.startTime ?? "09:00",
+        endTime: data.endTime ?? "18:00",
+        lateToleranceMinutes: data.lateToleranceMinutes ?? 0,
+        breakMinutes: data.breakMinutes ?? 60,
+        isActive: data.isActive ?? true,
+        isOrganizationDefault: data.isOrganizationDefault ?? false,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await firestore.collection(COLLECTIONS.schedules).doc(id).set(payload);
+      return toWorkSchedule(id, payload);
+    },
+  },
+
+  workLocation: {
+    async create({ data }: { data: Record<string, unknown> }) {
+      const id = crypto.randomUUID();
+      const now = new Date();
+      const payload = {
+        name: data.name ?? "Location",
+        address: data.address ?? null,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        radiusMeters: data.radiusMeters ?? 200,
+        isActive: data.isActive ?? true,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await firestore.collection(COLLECTIONS.locations).doc(id).set(payload);
+      return toWorkLocation(id, payload);
+    },
+  },
+
+  setting: {
+    async upsert({
+      create,
+      update,
+    }: {
+      where: { id: number };
+      create: Record<string, unknown>;
+      update: Record<string, unknown>;
+    }) {
+      const ref = firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID);
+      const existing = await ref.get();
+      const now = new Date();
+      const payload = existing.exists
+        ? { ...update, updatedAt: now }
+        : {
+            organizationName: create.organizationName ?? "Test Org",
+            timezone: create.timezone ?? "Asia/Jakarta",
+            defaultScheduleId: create.defaultScheduleId ?? null,
+            requireLocationValidation: create.requireLocationValidation ?? false,
+            updatedAt: now,
+          };
+      await ref.set(payload, { merge: true });
+      const snapshot = await ref.get();
+      return toSetting(snapshot.id, snapshot.data() ?? {});
+    },
+
+    async update({
+      data,
+    }: {
+      where: { id: number };
+      data: Record<string, unknown>;
+    }) {
+      const ref = firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID);
+      await ref.set({ ...data, updatedAt: new Date() }, { merge: true });
+      const snapshot = await ref.get();
+      return toSetting(snapshot.id, snapshot.data() ?? {});
+    },
+  },
+
+  async $disconnect(): Promise<void> {
+    // The Admin SDK owns its transport; nothing to close between suites.
+  },
+};
 
 /** The signed-in user for the current test. Mutated by `signInAs`. */
 export const currentUser = {
@@ -67,7 +289,7 @@ export const currentUser = {
   name: "Test Employee",
   // Not `as const`: suites sign in as an admin, and a narrower type here would
   // make that assignment a compile error rather than a test failure.
-  role: "EMPLOYEE" as "EMPLOYEE" | "ADMIN" | "SUPER_ADMIN",
+  role: "EMPLOYEE" as "EMPLOYEE" | "INTERN" | "ADMIN" | "SUPER_ADMIN",
   department: null,
   employeeCode: null,
   phone: null,
@@ -95,47 +317,16 @@ vi.mock("@/lib/dal/auth", async () => {
   };
 });
 
+/** Clears the emulator. The REST endpoint is the only reliable full wipe. */
 export async function resetDatabase(): Promise<void> {
-  // Second line of defence, inside the suite itself. Both settings from the
-  // client above are verified, because either one alone leaves the run writing
-  // into `public`:
-  //
-  //  - `current_schema()` covers raw SQL, resolved via the pool's `search_path`.
-  //  - a model-level write covers Prisma's generated statements, which are
-  //    qualified from the adapter's `schema` option rather than the URL.
-  //
-  // The first version checked only `search_path`, which passed while every write
-  // still went to the development tables.
-  const schemaRows = await db.$queryRawUnsafe<{ current_schema: string }[]>(
-    "select current_schema()",
+  const host = assertEmulator();
+  const response = await fetch(
+    `http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`,
+    { method: "DELETE" },
   );
-  if (schemaRows[0]?.current_schema !== TEST_SCHEMA) {
-    throw new Error(
-      `Refusing to truncate: pool search_path is "${schemaRows[0]?.current_schema}", expected "${TEST_SCHEMA}".`,
-    );
+  if (!response.ok) {
+    throw new Error(`Failed to clear Firestore emulator: ${response.status} ${response.statusText}`);
   }
-
-  await db.user.create({
-    data: {
-      id: SCHEMA_PROBE_ID,
-      email: "schema-probe@attendance.test",
-      passwordHash: "x",
-      name: "schema probe",
-    },
-  });
-  const leaked = await db.$queryRawUnsafe<{ n: number }[]>(
-    `select count(*)::int as n from public.users where id = '${SCHEMA_PROBE_ID}'`,
-  );
-  if ((leaked[0]?.n ?? 0) > 0) {
-    throw new Error(
-      "Refusing to truncate: a Prisma write landed in public.users. The test schema is not being used.",
-    );
-  }
-
-  // TRUNCATE ... CASCADE also clears the foreign keys between these tables.
-  await db.$executeRawUnsafe(
-    `truncate table "attendances", "audit_logs", "users", "work_locations", "work_schedules", "settings" restart identity cascade`,
-  );
 }
 
 export interface ScheduleSeed {
@@ -164,13 +355,14 @@ export async function seedSchedule(overrides: ScheduleSeed = {}) {
 export interface UserSeed {
   email?: string;
   name?: string;
-  role?: "EMPLOYEE" | "ADMIN" | "SUPER_ADMIN";
+  role?: "EMPLOYEE" | "INTERN" | "ADMIN" | "SUPER_ADMIN";
   scheduleId?: string | null;
   isActive?: boolean;
 }
 
 export async function seedUser(overrides: UserSeed = {}) {
-  const email = overrides.email ?? `user-${Math.random().toString(36).slice(2, 8)}@attendance.test`;
+  const email =
+    overrides.email ?? `user-${Math.random().toString(36).slice(2, 8)}@attendance.test`;
   return db.user.create({
     data: {
       email,
@@ -201,15 +393,16 @@ export async function seedLocation(input: {
   });
 }
 
-export async function seedSettings(overrides: {
-  timezone?: string;
-  requireLocationValidation?: boolean;
-  defaultScheduleId?: string | null;
-} = {}) {
+export async function seedSettings(
+  overrides: {
+    timezone?: string;
+    requireLocationValidation?: boolean;
+    defaultScheduleId?: string | null;
+  } = {},
+) {
   return db.setting.upsert({
     where: { id: 1 },
     create: {
-      id: 1,
       organizationName: "Test Org",
       timezone: overrides.timezone ?? "Asia/Jakarta",
       requireLocationValidation: overrides.requireLocationValidation ?? false,
@@ -224,10 +417,16 @@ export async function seedSettings(overrides: {
 }
 
 /** Points the mocked identity at a freshly seeded user. */
-export function signInAs(user: { id: string; email: string; name: string }): void {
+export function signInAs(user: {
+  id: string;
+  email: string;
+  name: string;
+  role?: "EMPLOYEE" | "INTERN" | "ADMIN" | "SUPER_ADMIN";
+}): void {
   currentUser.id = user.id;
   currentUser.email = user.email;
   currentUser.name = user.name;
+  currentUser.role = user.role ?? "EMPLOYEE";
 }
 
 /**
@@ -255,7 +454,10 @@ export async function seedAdmin(email = `admin-${Date.now()}@attendance.test`) {
  * Minimal fixture: one schedule as the default, one employee signed in.
  * Returns both so tests can assert against real ids.
  */
-export async function baseFixture(overrides: UserSeed = {}, scheduleOverrides: ScheduleSeed = {}) {
+export async function baseFixture(
+  overrides: UserSeed = {},
+  scheduleOverrides: ScheduleSeed = {},
+) {
   await resetDatabase();
   const schedule = await seedSchedule(scheduleOverrides);
   await seedSettings({ defaultScheduleId: schedule.id });

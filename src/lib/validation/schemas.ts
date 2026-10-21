@@ -6,7 +6,7 @@ import { isSelfServiceRole } from "@/lib/attendance/time";
  *
  * Every Server Action parses its FormData (or JSON body) through one of these
  * before touching the database. Schemas are the boundary: nothing reaches
- * Prisma without passing through here first.
+ * Firestore without passing through here first.
  */
 
 const trimmedName = z

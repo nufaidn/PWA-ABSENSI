@@ -1,5 +1,5 @@
 /**
- * Demo data seed.
+ * Demo data seed for Firestore.
  *
  * Idempotent by design: every record is looked up by a natural key before being
  * created, so re-running the seed refreshes demo history without duplicating
@@ -8,19 +8,25 @@
  * Run with: `npm run db:seed`
  */
 import "dotenv/config";
-import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "../src/generated/prisma/client";
-import { Role } from "../src/generated/prisma/enums";
+import { firestore } from "../src/lib/firebase-config";
+import { Role } from "../src/lib/domain";
+import { parseEmployeeCode } from "../src/lib/attendance/employee-code";
 import { ROLE_LABEL } from "../src/lib/attendance/time";
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) {
-  throw new Error("DATABASE_URL is not set. Copy .env.example to .env first.");
-}
+const COLLECTIONS = {
+  users: "users",
+  schedules: "schedules",
+  locations: "locations",
+  settings: "settings",
+  attendance: "attendance",
+  auditLogs: "auditLogs",
+  userEmails: "userEmails",
+  employeeCodes: "employeeCodes",
+  counters: "counters",
+} as const;
 
-const db = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
-
+const SETTINGS_DOC_ID = "organization";
 const SEED_PASSWORD = process.env.SEED_DEFAULT_PASSWORD ?? "Password123!";
 
 /**
@@ -106,18 +112,6 @@ function dateKeyInZone(date: Date, timeZone: string): string {
   return new Date(date.getTime() + getOffsetMinutes(date, timeZone) * MS_PER_MINUTE)
     .toISOString()
     .slice(0, 10);
-}
-
-/**
- * A `YYYY-MM-DD` key as the value to store in an `@db.Date` column.
- *
- * Must be UTC midnight of the calendar date. Subtracting the zone offset here
- * (as an earlier version did) yields the previous day in WIB, and PostgreSQL
- * truncates that to the wrong date — the same off-by-one the DAL had.
- */
-function workDateFromKey(key: string): Date {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(Date.UTC(y, m - 1, d));
 }
 
 /** Resolves a wall-clock time on `key` to a real instant in `timeZone`. */
@@ -247,69 +241,90 @@ const HISTORY_DAYS = 45;
 // Seed
 // ---------------------------------------------------------------------------
 
+async function findOne(collection: string, field: string, value: string) {
+  const snapshot = await firestore
+    .collection(collection)
+    .where(field, "==", value)
+    .limit(1)
+    .get();
+  return snapshot.docs[0] ?? null;
+}
+
 async function main() {
   assertDemoSeedAllowed();
   console.log("Seeding demo data…\n");
 
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 12);
+  const now = new Date();
 
   // --- Schedules ---------------------------------------------------------
-  const schedules = new Map();
+  const schedules = new Map<
+    string,
+    { id: string; startTime: string; endTime: string; lateToleranceMinutes: number; breakMinutes: number }
+  >();
   for (const definition of SCHEDULES) {
-    // `isDefault` is a seed-only flag: the database column is called
-    // `isOrganizationDefault`, so it must not be forwarded to Prisma.
-    const { isDefault, ...fields } = definition;
-    const schedule = await db.workSchedule.upsert({
-      where: { name: definition.name },
-      create: {
-        ...fields,
-        isOrganizationDefault: isDefault,
-      },
-      update: {
-        ...fields,
-        isOrganizationDefault: isDefault,
-        isActive: true,
-      },
+    const existing = await findOne(COLLECTIONS.schedules, "name", definition.name);
+    const id = existing?.id ?? crypto.randomUUID();
+    const data = {
+      name: definition.name,
+      description: null,
+      startTime: definition.startTime,
+      endTime: definition.endTime,
+      lateToleranceMinutes: definition.lateToleranceMinutes,
+      breakMinutes: definition.breakMinutes,
+      isActive: true,
+      isOrganizationDefault: definition.isDefault,
+      createdAt: existing?.data().createdAt ?? now,
+      updatedAt: now,
+    };
+    await firestore.collection(COLLECTIONS.schedules).doc(id).set(data);
+    schedules.set(definition.name, {
+      id,
+      startTime: definition.startTime,
+      endTime: definition.endTime,
+      lateToleranceMinutes: definition.lateToleranceMinutes,
+      breakMinutes: definition.breakMinutes,
     });
-    schedules.set(definition.name, schedule);
   }
-  const defaultSchedule = schedules.get("Jam Kerja Reguler");
+  const defaultSchedule = schedules.get("Jam Kerja Reguler")!;
   console.log(`  schedules: ${schedules.size}`);
 
   // --- Settings ----------------------------------------------------------
-  await db.setting.upsert({
-    where: { id: 1 },
-    create: {
-      id: 1,
+  await firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID).set(
+    {
       organizationName: ORGANIZATION,
       timezone: TIMEZONE,
       defaultScheduleId: defaultSchedule.id,
       // Off by default: enforcing GPS would block demo check-ins from a
       // desktop browser, which is exactly the failure mode this flag avoids.
       requireLocationValidation: false,
+      updatedAt: now,
     },
-    update: {
-      organizationName: ORGANIZATION,
-      timezone: TIMEZONE,
-      defaultScheduleId: defaultSchedule.id,
-    },
-  });
+    { merge: true },
+  );
   console.log("  settings: organization, timezone, default schedule");
 
   // --- Locations ---------------------------------------------------------
   for (const location of LOCATIONS) {
-    await db.workLocation.upsert({
-      where: { name: location.name },
-      create: location,
-      update: { ...location, isActive: true },
+    const existing = await findOne(COLLECTIONS.locations, "name", location.name);
+    const id = existing?.id ?? crypto.randomUUID();
+    await firestore.collection(COLLECTIONS.locations).doc(id).set({
+      ...location,
+      isActive: true,
+      createdAt: existing?.data().createdAt ?? now,
+      updatedAt: now,
     });
   }
   console.log(`  locations: ${LOCATIONS.length}`);
 
   // --- Users -------------------------------------------------------------
-  const users = new Map();
+  const users = new Map<string, { id: string; email: string; name: string }>();
   for (const definition of USERS) {
+    const email = definition.email.toLowerCase();
+    const existing = await findOne(COLLECTIONS.users, "email", email);
+    const id = existing?.id ?? crypto.randomUUID();
     const data = {
+      email,
       name: definition.name,
       passwordHash,
       employeeCode: definition.employeeCode,
@@ -317,17 +332,35 @@ async function main() {
       department: definition.department,
       phone: definition.phone ?? null,
       isActive: definition.isActive ?? true,
-      scheduleId: schedules.get(definition.schedule).id,
+      scheduleId: schedules.get(definition.schedule)!.id,
+      createdAt: existing?.data().createdAt ?? now,
+      updatedAt: now,
     };
-
-    const user = await db.user.upsert({
-      where: { email: definition.email },
-      create: { email: definition.email, ...data },
-      update: data,
-      select: { id: true, email: true, name: true },
+    const batch = firestore.batch();
+    batch.set(firestore.collection(COLLECTIONS.users).doc(id), data);
+    batch.set(firestore.collection(COLLECTIONS.userEmails).doc(email), { userId: id });
+    batch.set(firestore.collection(COLLECTIONS.employeeCodes).doc(definition.employeeCode), {
+      userId: id,
     });
-    users.set(definition.email, user);
+    await batch.commit();
+    users.set(email, { id, email, name: definition.name });
   }
+
+  // Counters keep generated codes ahead of every explicitly seeded code.
+  const highestByPrefix = new Map<string, number>();
+  for (const definition of USERS) {
+    const parsed = parseEmployeeCode(definition.employeeCode);
+    if (!parsed) continue;
+    highestByPrefix.set(
+      parsed.prefix,
+      Math.max(highestByPrefix.get(parsed.prefix) ?? 0, parsed.sequence),
+    );
+  }
+  const counterBatch = firestore.batch();
+  for (const [prefix, value] of highestByPrefix) {
+    counterBatch.set(firestore.collection(COLLECTIONS.counters).doc(prefix), { value });
+  }
+  await counterBatch.commit();
   console.log(`  users: ${users.size}`);
 
   // --- Attendance history ------------------------------------------------
@@ -336,38 +369,47 @@ async function main() {
   let attendanceCount = 0;
 
   for (const definition of activeUsers) {
-    const user = users.get(definition.email);
-    const schedule = schedules.get(definition.schedule);
+    const user = users.get(definition.email.toLowerCase())!;
+    const schedule = schedules.get(definition.schedule)!;
 
     for (let offset = HISTORY_DAYS; offset >= 0; offset -= 1) {
       const key = addDays(todayKey, -offset);
       const weekday = weekdayOf(key);
       const isWeekend = weekday === 0 || weekday === 6;
 
-      const workDate = workDateFromKey(key);
-
       // Weekend and accounts deactivated midway have no records.
       if (isWeekend) continue;
       if (definition.isActive === false) continue;
 
-      const existing = await db.attendance.findUnique({
-        where: { userId_workDate: { userId: user.id, workDate } },
-        select: { id: true },
-      });
-      if (existing) continue;
+      const ref = firestore
+        .collection(COLLECTIONS.attendance)
+        .doc(`${user.id}_${key}`);
+      const existing = await ref.get();
+      if (existing.exists) continue;
 
       // Roughly one absence in twenty, concentrated in the last two weeks so
       // the demo data shows a visible trend rather than uniform noise.
       const absenceWeight = offset < 14 ? 0.08 : 0.03;
       const roll = random();
       if (roll < absenceWeight) {
-        await db.attendance.create({
-          data: {
-            userId: user.id,
-            workDate,
-            status: "ABSENT",
-            notes: "Tanpa keterangan",
-          },
+        await ref.set({
+          userId: user.id,
+          workDate: key,
+          checkInAt: null,
+          checkOutAt: null,
+          checkInLatitude: null,
+          checkInLongitude: null,
+          checkInDistanceM: null,
+          checkOutLatitude: null,
+          checkOutLongitude: null,
+          checkOutDistanceM: null,
+          status: "ABSENT",
+          lateMinutes: 0,
+          workedMinutes: 0,
+          outsideRadius: false,
+          notes: "Tanpa keterangan",
+          createdAt: now,
+          updatedAt: now,
         });
         attendanceCount += 1;
         continue;
@@ -375,13 +417,24 @@ async function main() {
 
       const leaveWeight = offset < 14 ? 0.03 : 0.01;
       if (roll < absenceWeight + leaveWeight) {
-        await db.attendance.create({
-          data: {
-            userId: user.id,
-            workDate,
-            status: "LEAVE",
-            notes: pick(["Cuti tahunan", "Izin sakit", "Izin keperluan keluarga", "Cuti stabilizing"]),
-          },
+        await ref.set({
+          userId: user.id,
+          workDate: key,
+          checkInAt: null,
+          checkOutAt: null,
+          checkInLatitude: null,
+          checkInLongitude: null,
+          checkInDistanceM: null,
+          checkOutLatitude: null,
+          checkOutLongitude: null,
+          checkOutDistanceM: null,
+          status: "LEAVE",
+          lateMinutes: 0,
+          workedMinutes: 0,
+          outsideRadius: false,
+          notes: pick(["Cuti tahunan", "Izin sakit", "Izin keperluan keluarga", "Cuti stabilizing"]),
+          createdAt: now,
+          updatedAt: now,
         });
         attendanceCount += 1;
         continue;
@@ -435,23 +488,24 @@ async function main() {
       const jitterLat = office.latitude + (random() - 0.5) * 0.0012;
       const jitterLng = office.longitude + (random() - 0.5) * 0.0012;
 
-      await db.attendance.create({
-        data: {
-          userId: user.id,
-          workDate,
-          checkInAt,
-          checkOutAt: hasCheckout ? checkOutAt : null,
-          status: hasCheckout ? (isLate ? "LATE" : "PRESENT") : "INCOMPLETE",
-          lateMinutes: isLate ? lateMinutes : 0,
-          workedMinutes,
-          checkInLatitude: jitterLat,
-          checkInLongitude: jitterLng,
-          checkInDistanceM: distanceMeters,
-          checkOutLatitude: hasCheckout ? jitterLat : null,
-          checkOutLongitude: hasCheckout ? jitterLng : null,
-          checkOutDistanceM: hasCheckout ? Math.round(distanceMeters * 1.4) : null,
-          outsideRadius,
-        },
+      await ref.set({
+        userId: user.id,
+        workDate: key,
+        checkInAt,
+        checkOutAt: hasCheckout ? checkOutAt : null,
+        status: hasCheckout ? (isLate ? "LATE" : "PRESENT") : "INCOMPLETE",
+        lateMinutes: isLate ? lateMinutes : 0,
+        workedMinutes,
+        checkInLatitude: jitterLat,
+        checkInLongitude: jitterLng,
+        checkInDistanceM: distanceMeters,
+        checkOutLatitude: hasCheckout ? jitterLat : null,
+        checkOutLongitude: hasCheckout ? jitterLng : null,
+        checkOutDistanceM: hasCheckout ? Math.round(distanceMeters * 1.4) : null,
+        outsideRadius,
+        notes: null,
+        createdAt: now,
+        updatedAt: now,
       });
       attendanceCount += 1;
     }
@@ -459,41 +513,49 @@ async function main() {
   console.log(`  attendance: ${attendanceCount} records over ${HISTORY_DAYS} days`);
 
   // --- Audit log sample --------------------------------------------------
-  const adminActor = users.get("admin@demo.test");
-  const auditCount = await db.auditLog.count();
-  if (auditCount === 0) {
-    await db.auditLog.createMany({
-      data: [
-        {
-          actorId: adminActor.id,
-          action: "EMPLOYEE_CREATED",
-          entityType: "User",
-          summary: "Membuat karyawan Ratna Dewi (ratna@demo.test) dengan role EMPLOYEE",
-          ipAddress: "127.0.0.1",
-          createdAt: new Date(Date.now() - 6 * 86_400_000),
-        },
-        {
-          actorId: adminActor.id,
-          action: "SCHEDULE_UPDATED",
-          entityType: "WorkSchedule",
-          summary: "Memperbarui jadwal Shift Pagi (07:00-15:00)",
-          ipAddress: "127.0.0.1",
-          createdAt: new Date(Date.now() - 3 * 86_400_000),
-        },
-        {
-          actorId: users.get("superadmin@demo.test").id,
-          action: "SETTINGS_UPDATED",
-          entityType: "Setting",
-          entityId: "1",
-          summary: "Memperbarui pengaturan: zona waktu Asia/Jakarta, validasi lokasi opsional",
-          ipAddress: "127.0.0.1",
-          createdAt: new Date(Date.now() - 86_400_000),
-        },
-      ],
-    });
+  const adminActor = users.get("admin@demo.test")!;
+  const audit = await firestore.collection(COLLECTIONS.auditLogs).limit(1).get();
+  if (audit.empty) {
+    const auditBatch = firestore.batch();
+    const entries = [
+      {
+        actorId: adminActor.id,
+        action: "EMPLOYEE_CREATED",
+        entityType: "User",
+        entityId: null,
+        summary: "Membuat karyawan Ratna Dewi (ratna@demo.test) dengan role EMPLOYEE",
+        metadata: null,
+        ipAddress: "127.0.0.1",
+        createdAt: new Date(Date.now() - 6 * 86_400_000),
+      },
+      {
+        actorId: adminActor.id,
+        action: "SCHEDULE_UPDATED",
+        entityType: "WorkSchedule",
+        entityId: null,
+        summary: "Memperbarui jadwal Shift Pagi (07:00-15:00)",
+        metadata: null,
+        ipAddress: "127.0.0.1",
+        createdAt: new Date(Date.now() - 3 * 86_400_000),
+      },
+      {
+        actorId: users.get("superadmin@demo.test")!.id,
+        action: "SETTINGS_UPDATED",
+        entityType: "Setting",
+        entityId: SETTINGS_DOC_ID,
+        summary: "Memperbarui pengaturan: zona waktu Asia/Jakarta, validasi lokasi opsional",
+        metadata: null,
+        ipAddress: "127.0.0.1",
+        createdAt: new Date(Date.now() - 86_400_000),
+      },
+    ];
+    for (const entry of entries) {
+      auditBatch.set(firestore.collection(COLLECTIONS.auditLogs).doc(), entry);
+    }
+    await auditBatch.commit();
     console.log("  audit log: 3 entries");
   } else {
-    console.log(`  audit log: ${auditCount} entries (skipped)`);
+    console.log("  audit log: existing entries (skipped)");
   }
 
   console.log("\nSeed complete. Demo accounts:\n");
@@ -512,5 +574,5 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await db.$disconnect();
+    await firestore.terminate();
   });

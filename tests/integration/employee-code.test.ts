@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { db, resetDatabase, seedAdmin } from "./setup";
 import { allocateEmployeeCode, createEmployee } from "@/lib/dal/employees";
-import { Role } from "@/generated/prisma/enums";
+import { Role } from "@/lib/domain";
 
 /**
  * Code allocation against a real database.

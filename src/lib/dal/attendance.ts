@@ -1,7 +1,13 @@
 import "server-only";
 import { cache } from "react";
-import type { AttendanceStatus } from "@/generated/prisma/enums";
-import { db } from "@/lib/db";
+import { FieldPath } from "firebase-admin/firestore";
+import type { AttendanceStatus } from "@/lib/domain";
+import {
+  COLLECTIONS,
+  attendanceDocId,
+  firestore,
+  toAttendance,
+} from "@/lib/db";
 import { assertUser, type CurrentUser } from "./auth";
 import {
   calculateWorkedMinutes,
@@ -16,6 +22,7 @@ import {
 import {
   addDaysToDateKey,
   dateKeyToDbDate,
+  formatDateKey,
   formatDuration,
   toLocalDateKey,
   isWorkingDay,
@@ -33,10 +40,10 @@ import {
 /**
  * Attendance Data Access Layer.
  *
- * All mutating paths run inside a database transaction and lean on the
- * `(userId, workDate)` unique constraint rather than on read-then-write checks
- * in application code, so a double check-in is rejected by PostgreSQL even if
- * two requests race.
+ * One document per employee per calendar day, keyed by `${userId}_${workDate}`.
+ * Firestore's `create`-in-a-transaction semantics (the document id is fixed) is
+ * what makes a double check-in structurally impossible, even if two requests
+ * race.
  */
 
 export class AttendanceError extends Error {
@@ -130,25 +137,28 @@ export const getTodaySummary = cache(async (): Promise<TodaySummary> => {
   const now = new Date();
   const dateKey = toLocalDateKey(now, context.timezone);
 
-  const record = await db.attendance.findUnique({
-    where: { userId_workDate: { userId: user.id, workDate: dateKeyToDbDate(dateKey) } },
-    select: {
-      id: true,
-      status: true,
-      checkInAt: true,
-      checkOutAt: true,
-      lateMinutes: true,
-      workedMinutes: true,
-      checkInDistanceM: true,
-      outsideRadius: true,
-      notes: true,
-    },
-  });
+  const snapshot = await firestore
+    .collection(COLLECTIONS.attendance)
+    .doc(attendanceDocId(user.id, dateKey))
+    .get();
+  const record = snapshot.exists ? toAttendance(snapshot.id, snapshot.data() ?? {}) : null;
 
   return {
     dateKey,
     serverNow: now,
-    attendance: record,
+    attendance: record
+      ? {
+          id: record.id,
+          status: record.status,
+          checkInAt: record.checkInAt,
+          checkOutAt: record.checkOutAt,
+          lateMinutes: record.lateMinutes,
+          workedMinutes: record.workedMinutes,
+          checkInDistanceM: record.checkInDistanceM,
+          outsideRadius: record.outsideRadius,
+          notes: record.notes,
+        }
+      : null,
     schedule: context.schedule,
     timezone: context.timezone,
     isWorkingDay: isWorkingDay(dateKey, context.workingDays),
@@ -179,9 +189,6 @@ export async function checkIn(input: {
 
   const now = input.now ?? new Date();
   const dateKey = toLocalDateKey(now, context.timezone);
-  // `workDate` is an `@db.Date`: it must be anchored to UTC midnight of the
-  // calendar date, not to the zoned instant of local midnight.
-  const workDate = dateKeyToDbDate(dateKey);
 
   if (!isWorkingDay(dateKey, context.workingDays)) {
     throw new AttendanceError(
@@ -205,8 +212,7 @@ export async function checkIn(input: {
     if (locationOutcome.kind === "NO_LOCATION" && locationOutcome.reason === "NO_FENCE_CONFIGURED") {
       // Fail closed. Enforcement with no fences would otherwise accept every
       // check-in from anywhere, which reads as "location validation is on" while
-      // providing none. The settings screen warns about this state, but a warning
-      // in the UI is not a control on the server.
+      // providing none.
       throw new AttendanceError(
         "Validasi lokasi aktif, tetapi belum ada lokasi kerja yang terdaftar. Hubungi admin.",
         "NO_FENCE_CONFIGURED",
@@ -229,15 +235,15 @@ export async function checkIn(input: {
     context.timezone,
   );
 
-  // `lateMinutes` is frozen at check-in time on purpose: if an admin later
-  // widens the tolerance, history still reflects the rule that applied then.
-  const record = await db.$transaction(async (tx) => {
-    // Re-read inside the transaction so the existing-record case is detected
-    // against the same snapshot that performs the insert.
-    const existing = await tx.attendance.findUnique({
-      where: { userId_workDate: { userId: user.id, workDate } },
-      select: { id: true, checkInAt: true },
-    });
+  const docRef = firestore
+    .collection(COLLECTIONS.attendance)
+    .doc(attendanceDocId(user.id, dateKey));
+
+  const record = await firestore.runTransaction(async (tx) => {
+    const existingSnapshot = await tx.get(docRef);
+    const existing = existingSnapshot.exists
+      ? toAttendance(existingSnapshot.id, existingSnapshot.data() ?? {})
+      : null;
 
     if (existing?.checkInAt) {
       throw new AttendanceError(
@@ -248,7 +254,7 @@ export async function checkIn(input: {
 
     const data = {
       userId: user.id,
-      workDate,
+      workDate: dateKey,
       checkInAt: now,
       status: evaluation.status,
       lateMinutes: evaluation.lateMinutes,
@@ -256,12 +262,21 @@ export async function checkIn(input: {
       checkInLongitude: point?.longitude ?? null,
       checkInDistanceM: distanceMeters,
       outsideRadius,
+      updatedAt: now,
     };
 
     if (existing) {
-      return tx.attendance.update({ where: { id: existing.id }, data });
+      tx.update(docRef, data);
+    } else {
+      tx.set(docRef, { ...data, createdAt: now });
     }
-    return tx.attendance.create({ data });
+
+    return {
+      ...data,
+      id: docRef.id,
+      checkOutAt: existing?.checkOutAt ?? null,
+      workedMinutes: existing?.workedMinutes ?? 0,
+    };
   });
 
   return {
@@ -295,18 +310,15 @@ export async function checkOut(
 
   const now = input.now ?? new Date();
   const dateKey = toLocalDateKey(now, context.timezone);
-  const workDate = dateKeyToDbDate(dateKey);
+  const docRef = firestore
+    .collection(COLLECTIONS.attendance)
+    .doc(attendanceDocId(user.id, dateKey));
 
-  return db.$transaction(async (tx) => {
-    const existing = await tx.attendance.findUnique({
-      where: { userId_workDate: { userId: user.id, workDate } },
-      select: {
-        id: true,
-        checkInAt: true,
-        checkOutAt: true,
-        lateMinutes: true,
-      },
-    });
+  return firestore.runTransaction(async (tx) => {
+    const snapshot = await tx.get(docRef);
+    const existing = snapshot.exists
+      ? toAttendance(snapshot.id, snapshot.data() ?? {})
+      : null;
 
     // Without a check-in there is no shift to close. This is the "invalid
     // check-out" case and it must never silently create a record.
@@ -345,22 +357,21 @@ export async function checkOut(
       }
     }
 
-    const updated = await tx.attendance.update({
-      where: { id: existing.id },
-      data: {
-        checkOutAt: now,
-        checkOutLatitude: input?.point?.latitude ?? null,
-        checkOutLongitude: input?.point?.longitude ?? null,
-        checkOutDistanceM,
-        outsideRadius: outsideRadius || undefined,
-        workedMinutes,
-        status: finaliseStatus(existing.lateMinutes),
-      },
-    });
+    const data = {
+      checkOutAt: now,
+      checkOutLatitude: input?.point?.latitude ?? null,
+      checkOutLongitude: input?.point?.longitude ?? null,
+      checkOutDistanceM,
+      ...(outsideRadius ? { outsideRadius: true } : {}),
+      workedMinutes,
+      status: finaliseStatus(existing.lateMinutes),
+      updatedAt: now,
+    };
+    tx.update(docRef, data);
 
     return {
-      id: updated.id,
-      status: updated.status,
+      id: docRef.id,
+      status: data.status,
       checkInAt: existing.checkInAt,
       checkOutAt: now,
       workedMinutes,
@@ -413,45 +424,35 @@ export async function getOwnHistory(options: {
 
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.min(60, Math.max(5, options.pageSize ?? 15));
-  const { from, to } = resolveRange(options.from, options.to, context.timezone);
+  const { fromKey, toKey } = resolveRange(options.from, options.to, context.timezone);
 
-  const where = {
-    userId: user.id,
-    workDate: { gte: from, lte: to },
-    ...(options.status && options.status !== "ALL" ? { status: options.status } : {}),
-  };
+  // Document ids are `${userId}_${YYYY-MM-DD}`, so a range query on the id is
+  // both index-free and scoped to this employee.
+  const snapshot = await firestore
+    .collection(COLLECTIONS.attendance)
+    .where(FieldPath.documentId(), ">=", attendanceDocId(user.id, fromKey))
+    .where(FieldPath.documentId(), "<=", attendanceDocId(user.id, toKey))
+    .get();
 
-  const [total, records, aggregates] = await Promise.all([
-    db.attendance.count({ where }),
-    db.attendance.findMany({
-      where,
-      orderBy: { workDate: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      select: {
-        id: true,
-        workDate: true,
-        status: true,
-        checkInAt: true,
-        checkOutAt: true,
-        lateMinutes: true,
-        workedMinutes: true,
-        outsideRadius: true,
-        checkInDistanceM: true,
-      },
-    }),
-    db.attendance.aggregate({
-      where,
-      _count: { id: true },
-      _sum: { workedMinutes: true, lateMinutes: true },
-    }),
-  ]);
+  const filtered = snapshot.docs
+    .map((doc) => toAttendance(doc.id, doc.data()))
+    .filter((record) => !options.status || options.status === "ALL" || record.status === options.status)
+    .sort((a, b) => b.workDate.localeCompare(a.workDate));
 
-  const grouped = await db.attendance.groupBy({
-    by: ["status"],
-    where,
-    _count: { _all: true },
-  });
+  const counts = new Map<AttendanceStatus, number>();
+  let totalWorkedMinutes = 0;
+  for (const record of filtered) {
+    counts.set(record.status, (counts.get(record.status) ?? 0) + 1);
+    totalWorkedMinutes += record.workedMinutes;
+  }
+  const groups = [...counts.entries()].map(([status, count]) => ({
+    status,
+    _count: { _all: count },
+  }));
+
+  const total = filtered.length;
+  const start = (page - 1) * pageSize;
+  const records = filtered.slice(start, start + pageSize);
 
   return {
     rows: records.map((record) => toHistoryRow(record, context.timezone, context.workingDays)),
@@ -459,14 +460,14 @@ export async function getOwnHistory(options: {
     page,
     pageSize,
     pageCount: Math.max(1, Math.ceil(total / pageSize)),
-    summary: summarizeStatuses(grouped, aggregates._sum.workedMinutes ?? 0),
+    summary: summarizeStatuses(groups, totalWorkedMinutes),
   };
 }
 
 function toHistoryRow(
   record: {
     id: string;
-    workDate: Date;
+    workDate: string;
     status: AttendanceStatus;
     checkInAt: Date | null;
     checkOutAt: Date | null;
@@ -478,20 +479,17 @@ function toHistoryRow(
   timezone: string,
   workingDays: readonly number[],
 ): HistoryRow {
-  const dateKey = toLocalDateKey(record.workDate, timezone);
+  const dateKey = record.workDate;
+  const date = dateKeyToDbDate(dateKey);
   const dayName = new Intl.DateTimeFormat("id-ID", {
     weekday: "short",
     timeZone: "UTC",
-  }).format(record.workDate);
+  }).format(date);
 
   return {
     id: record.id,
     workDate: dateKey,
-    dateLabel: new Intl.DateTimeFormat("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    }).format(record.workDate),
+    dateLabel: formatDateKey(dateKey),
     dayLabel: dayName,
     status: record.status,
     checkInAt: record.checkInAt,
@@ -530,15 +528,15 @@ function resolveRange(
   from: string | undefined,
   to: string | undefined,
   timezone: string,
-): { from: Date; to: Date } {
+): { fromKey: string; toKey: string } {
   const todayKey = toLocalDateKey(new Date(), timezone);
   const toKey = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? to : todayKey;
   const fromKey =
     from && /^\d{4}-\d{2}-\d{2}$/.test(from) ? from : shiftDateKey(toKey, -29);
   // Swap if the caller passed the range backwards.
   return fromKey <= toKey
-    ? { from: dateKeyToDbDate(fromKey), to: dateKeyToDbDate(toKey) }
-    : { from: dateKeyToDbDate(toKey), to: dateKeyToDbDate(fromKey) };
+    ? { fromKey, toKey }
+    : { fromKey: toKey, toKey: fromKey };
 }
 
 export function shiftDateKey(dateKey: string, days: number): string {
