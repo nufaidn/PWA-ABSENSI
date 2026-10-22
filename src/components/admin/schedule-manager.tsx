@@ -397,11 +397,29 @@ export function DeleteScheduleDialog({
           <DialogTitle>Hapus jadwal</DialogTitle>
           <DialogDescription>
             Jadwal <strong>{schedule?.name}</strong> akan dihapus permanen.
-            {schedule && schedule.assignedCount > 0
-              ? ` Jadwal ini masih dipakai ${schedule.assignedCount} karyawan sehingga penghapusan akan ditolak.`
-              : ""}
           </DialogDescription>
         </DialogHeader>
+
+        {schedule && (schedule.assignedCount > 0 || schedule.isOrganizationDefault) ? (
+          <ul className="space-y-1.5 rounded-lg bg-muted px-3.5 py-3 text-[12.5px] leading-relaxed text-muted-foreground">
+            {schedule.assignedCount > 0 ? (
+              <li>
+                <strong className="font-medium text-foreground">
+                  {schedule.assignedCount} karyawan
+                </strong>{" "}
+                memakai jadwal ini. Setelah dihapus, mereka kembali memakai jadwal default
+                organisasi. Riwayat absensinya tidak ikut terhapus.
+              </li>
+            ) : null}
+            {schedule.isOrganizationDefault ? (
+              <li>
+                Jadwal ini adalah <strong className="font-medium text-foreground">default</strong>{" "}
+                organisasi. Jadwal aktif lain akan menjadi default, atau pilih default baru di
+                Pengaturan.
+              </li>
+            ) : null}
+          </ul>
+        ) : null}
 
         <form action={formAction} className="flex flex-col gap-4">
           <input type="hidden" name="id" value={schedule?.id ?? ""} />
@@ -478,12 +496,7 @@ export function ScheduleList({ schedules }: { schedules: ScheduleFormValues[] })
                 size="icon"
                 aria-label={`Hapus jadwal ${schedule.name}`}
                 onClick={() => setDeleting(schedule)}
-                disabled={schedule.assignedCount > 0}
-                title={
-                  schedule.assignedCount > 0
-                    ? "Lepas dari karyawan terlebih dahulu"
-                    : "Hapus jadwal"
-                }
+                title="Hapus jadwal"
                 className="size-9 text-destructive hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 className="size-4" />

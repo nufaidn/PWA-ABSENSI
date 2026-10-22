@@ -704,23 +704,68 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
   return { ...updated, _count: { users: await scheduleUsage(id) } };
 }
 
-export async function deleteSchedule(id: string): Promise<void> {
+/**
+ * Deletes a schedule.
+ *
+ * Employees who are still on it are *not* a reason to refuse: they fall back
+ * to the organization default, which is exactly what happens to anyone without
+ * a schedule of their own. Their attendance history is untouched. Blocking the
+ * deletion instead left administrators unable to replace a schedule without
+ * first reassigning every employee by hand.
+ *
+ * When the deleted schedule was the organization default, another active
+ * schedule is promoted so those employees keep a sensible one instead of the
+ * hardcoded fallback (Monday–Friday, 09:00–18:00).
+ */
+export async function deleteSchedule(
+  id: string,
+): Promise<{ movedUsers: number; newDefaultName: string | null }> {
   const actor = await assertRole("ADMIN");
   const existingSnapshot = await schedules().doc(id).get();
   if (!existingSnapshot.exists) throw new NotFoundError("Jadwal tidak ditemukan.");
   const existing = toWorkSchedule(existingSnapshot.id, existingSnapshot.data() ?? {});
+  const now = new Date();
 
-  const usedBy = await scheduleUsage(id);
-  if (usedBy > 0) {
-    throw new Error(
-      `Jadwal masih digunakan oleh ${usedBy} karyawan. Lepaskan terlebih dahulu.`,
-    );
+  const [userSnapshot, scheduleSnapshot] = await Promise.all([
+    firestore.collection(COLLECTIONS.users).where("scheduleId", "==", id).get(),
+    firestore.collection(COLLECTIONS.schedules).get(),
+  ]);
+
+  const batch = firestore.batch();
+
+  // Employees on this schedule fall back to the organization default.
+  for (const doc of userSnapshot.docs) {
+    batch.update(doc.ref, { scheduleId: null, updatedAt: now });
   }
 
-  await schedules().doc(id).delete();
+  batch.delete(schedules().doc(id));
+
+  let newDefaultName: string | null = null;
   if (existing.isOrganizationDefault) {
-    await syncSettingDefault(null);
+    const candidates = scheduleSnapshot.docs
+      .filter((doc) => doc.id !== id)
+      .map((doc) => toWorkSchedule(doc.id, doc.data() ?? {}))
+      .filter((schedule) => schedule.isActive)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    const promoted = candidates[0];
+
+    for (const doc of scheduleSnapshot.docs) {
+      if (doc.id === id) continue;
+      batch.update(doc.ref, {
+        isOrganizationDefault: promoted ? doc.id === promoted.id : false,
+        updatedAt: now,
+      });
+    }
+    // `set` with merge, because the settings document may not exist yet.
+    batch.set(
+      firestore.collection(COLLECTIONS.settings).doc(SETTINGS_DOC_ID),
+      { defaultScheduleId: promoted ? promoted.id : null, updatedAt: now },
+      { merge: true },
+    );
+    newDefaultName = promoted ? promoted.name : null;
   }
+
+  await batch.commit();
 
   await recordAudit({
     actorId: actor.id,
@@ -728,5 +773,8 @@ export async function deleteSchedule(id: string): Promise<void> {
     entityType: "WorkSchedule",
     entityId: id,
     summary: `Menghapus jadwal ${existing.name}`,
+    metadata: { movedUsers: userSnapshot.size, newDefault: newDefaultName },
   });
+
+  return { movedUsers: userSnapshot.size, newDefaultName };
 }

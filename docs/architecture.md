@@ -103,8 +103,10 @@ tests/                   Unit test Vitest
   penulisan kedua gagal dengan `ALREADY_EXISTS`.
 - `userEmails/{email}` dan `employeeCodes/{code}` dibuat dalam transaksi/batch yang sama dengan
   `users/{userId}`, sehingga dua akun tidak dapat memakai email atau kode yang sama.
-- Penghapusan akun menghapus dokumen `attendance` miliknya di batch yang sama; penghapusan jadwal
-  ditolak selama masih ada `users` yang menunjuk ke jadwal tersebut.
+- Penghapusan akun menghapus dokumen `attendance` miliknya di batch yang sama. Penghapusan jadwal
+  **tidak** ditolak hanya karena masih dipakai: karyawan yang memakainya dikembalikan ke jadwal
+  default organisasi (`scheduleId = null`) dan riwayat absensinya tetap utuh. Kalau jadwal yang
+  dihapus adalah default organisasi, jadwal aktif lain otomatis menjadi default.
 - Semua mutasi multi-dokumen memakai `firestore.runTransaction` atau `WriteBatch`.
 
 ### Konsep kunci

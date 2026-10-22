@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import {
   ScheduleDialog,
+  ScheduleList,
   type ScheduleFormValues,
 } from "@/components/admin/schedule-manager";
 
@@ -99,5 +100,31 @@ describe("schedule working days", () => {
     const note = screen.getByLabelText("Catatan (opsional)") as HTMLTextAreaElement;
     expect(note.value).toBe("Khusus hari Sabtu, jam kerja 08:00-14:00.");
     expect(note.getAttribute("name")).toBe("description");
+  });
+});
+
+describe("deleting a schedule", () => {
+  it("keeps the delete button usable even while employees are on it", () => {
+    render(
+      <ScheduleList
+        schedules={[{ ...VALUES, id: "schedule-1", assignedCount: 3, isOrganizationDefault: true }]}
+      />,
+    );
+
+    const remove = screen.getByRole("button", { name: "Hapus jadwal Shift" });
+    expect(remove.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("explains what happens to the employees and to the default", () => {
+    render(
+      <ScheduleList
+        schedules={[{ ...VALUES, id: "schedule-1", assignedCount: 3, isOrganizationDefault: true }]}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Hapus jadwal Shift" }));
+
+    expect(screen.getAllByText(/3 karyawan/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/default/).length).toBeGreaterThan(0);
   });
 });

@@ -115,9 +115,26 @@ export async function deleteScheduleAction(
   if (!parsed.success) return { ok: false, error: "Permintaan tidak valid." };
 
   try {
-    await deleteSchedule(parsed.data.id);
+    const result = await deleteSchedule(parsed.data.id);
     revalidateScheduleViews();
-    return { ok: true, message: "Jadwal berhasil dihapus." };
+
+    const notes: string[] = [];
+    if (result.movedUsers > 0) {
+      notes.push(
+        `${result.movedUsers} karyawan yang memakai jadwal ini kembali memakai jadwal default organisasi`,
+      );
+    }
+    if (result.newDefaultName) {
+      notes.push(`jadwal default organisasi sekarang "${result.newDefaultName}"`);
+    }
+
+    return {
+      ok: true,
+      message:
+        notes.length > 0
+          ? `Jadwal berhasil dihapus. ${notes.join("; ")}.`
+          : "Jadwal berhasil dihapus.",
+    };
   } catch (error) {
     return { ok: false, ...toState(error) };
   }
