@@ -186,6 +186,16 @@ export const scheduleSchema = z
     endTime: timeString,
     lateToleranceMinutes: z.coerce.number().int().min(0).max(240),
     breakMinutes: z.coerce.number().int().min(0).max(480),
+    /**
+     * Days the schedule applies to, `0 = Minggu` … `6 = Sabtu`.
+     *
+     * At least one day is required: a schedule without working days would
+     * silently make every employee on it unable to check in.
+     */
+    workingDays: z
+      .array(z.coerce.number().int().min(0).max(6))
+      .min(1, "Pilih minimal satu hari kerja.")
+      .transform((days) => [...new Set(days)].sort((a, b) => a - b)),
     isActive: z.coerce.boolean().default(true),
     makeDefault: z.coerce.boolean().default(false),
   })

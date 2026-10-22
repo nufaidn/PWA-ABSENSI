@@ -18,6 +18,7 @@
     "db:migrate-from-postgres": "tsx scripts/migrate-postgres-to-firestore.ts",
     "db:purge-demo": "tsx scripts/delete-demo-accounts.ts --apply",
     "db:purge-reference": "tsx scripts/purge-reference-data.ts",
+    "db:backfill-working-days": "tsx scripts/backfill-working-days.ts",
     "db:reset": "tsx scripts/reset-dev-data.ts",
     "icons": "node scripts/generate-icons.mjs",
     "setup": "npm run db:seed",

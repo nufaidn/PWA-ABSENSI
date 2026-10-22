@@ -134,6 +134,28 @@ describe("check-in", () => {
     expect(await db.attendance.count()).toBe(0);
   });
 
+  it("accepts a day the schedule itself declares as a working day", async () => {
+    // The schedule — not a global setting — decides which days count.
+    await baseFixture({}, { workingDays: [1, 2, 3, 4, 5, 6] });
+
+    const saturday = new Date(Date.UTC(2026, 9, 17, 2, 0, 0));
+    const result = await checkIn({ now: saturday });
+
+    expect(result.status).toBe("PRESENT");
+    expect(await db.attendance.count()).toBe(1);
+  });
+
+  it("refuses a day the schedule leaves out", async () => {
+    await baseFixture({}, { workingDays: [1, 2, 3, 4, 5] });
+
+    const saturday = new Date(Date.UTC(2026, 9, 17, 2, 0, 0));
+
+    await expect(checkIn({ now: saturday })).rejects.toMatchObject({
+      code: "NOT_A_WORKING_DAY",
+    });
+    expect(await db.attendance.count()).toBe(0);
+  });
+
   it("accepts coordinates inside an active fence", async () => {
     await seedLocation({ name: "Kantor", ...JAKARTA, radiusMeters: 500 });
     const result = await checkIn({ now: at("08:55"), point: { latitude: -6.2089, longitude: 106.8457 } });

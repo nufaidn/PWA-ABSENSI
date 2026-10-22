@@ -1,6 +1,7 @@
 import "server-only";
 import { Timestamp, type DocumentData, type DocumentSnapshot } from "firebase-admin/firestore";
 import { firestore } from "@/lib/firebase-config";
+import { WEEKDAY_INDEXES } from "@/lib/attendance/time";
 import {
   AuditAction,
   AttendanceStatus,
@@ -85,6 +86,24 @@ function booleanOr(value: unknown, fallback = false): boolean {
   return typeof value === "boolean" ? value : fallback;
 }
 
+/**
+ * Reads the list of working days from a schedule document.
+ *
+ * Anything unusable — a missing field (documents written before schedules
+ * carried their days), a non-array, an out-of-range index — falls back to
+ * Monday–Friday, which is what the application assumed globally before the
+ * days became part of the schedule.
+ */
+function workingDaysOr(value: unknown, fallback: readonly number[]): number[] {
+  if (!Array.isArray(value)) return [...fallback];
+  const days = value.filter(
+    (day): day is number =>
+      typeof day === "number" && Number.isInteger(day) && day >= 0 && day <= 6,
+  );
+  if (days.length === 0) return [...fallback];
+  return [...new Set(days)].sort((a, b) => a - b);
+}
+
 function workDateKey(value: unknown): string {
   if (typeof value === "string") return value.slice(0, 10);
   const date = toDate(value);
@@ -117,6 +136,7 @@ export function toWorkSchedule(id: string, data: DocumentData): WorkSchedule {
     endTime: stringOr(data.endTime, "18:00"),
     lateToleranceMinutes: numberOr(data.lateToleranceMinutes),
     breakMinutes: numberOr(data.breakMinutes, 60),
+    workingDays: workingDaysOr(data.workingDays, WEEKDAY_INDEXES),
     isActive: data.isActive !== false,
     isOrganizationDefault: booleanOr(data.isOrganizationDefault),
     createdAt: dateOr(data.createdAt),

@@ -594,6 +594,8 @@ export interface ScheduleInput {
   endTime: string;
   lateToleranceMinutes: number;
   breakMinutes: number;
+  /** Days the schedule applies to, `0 = Minggu` … `6 = Sabtu`. */
+  workingDays: number[];
   isActive: boolean;
   makeDefault: boolean;
 }
@@ -630,6 +632,7 @@ export async function createSchedule(input: ScheduleInput): Promise<ScheduleWith
       endTime: input.endTime,
       lateToleranceMinutes: input.lateToleranceMinutes,
       breakMinutes: input.breakMinutes,
+      workingDays: [...input.workingDays].sort((a, b) => a - b),
       isActive: input.isActive,
       isOrganizationDefault: input.makeDefault,
       createdAt: now,
@@ -647,6 +650,7 @@ export async function createSchedule(input: ScheduleInput): Promise<ScheduleWith
     entityType: "WorkSchedule",
     entityId: created.id,
     summary: `Membuat jadwal ${created.name} (${created.startTime}-${created.endTime})`,
+    metadata: { workingDays: created.workingDays },
   });
 
   return { ...created, _count: { users: 0 } };
@@ -674,6 +678,7 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
       endTime: input.endTime,
       lateToleranceMinutes: input.lateToleranceMinutes,
       breakMinutes: input.breakMinutes,
+      workingDays: [...input.workingDays].sort((a, b) => a - b),
       isActive: input.isActive,
       ...(input.makeDefault ? { isOrganizationDefault: true } : {}),
       updatedAt: now,
@@ -690,6 +695,7 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
     entityType: "WorkSchedule",
     entityId: id,
     summary: `Memperbarui jadwal ${updated.name} (${updated.startTime}-${updated.endTime})`,
+    metadata: { workingDays: updated.workingDays },
   });
 
   return { ...updated, _count: { users: await scheduleUsage(id) } };

@@ -34,6 +34,20 @@ function revalidateScheduleViews() {
   revalidatePath("/dashboard");
 }
 
+/**
+ * Reads the selected working days from the form.
+ *
+ * Every day chip is a checkbox named `workingDays`, so the browser sends one
+ * entry per selected day. An empty selection is passed through as an empty
+ * array and rejected by the schema — silently defaulting to Monday–Friday
+ * would make a misclick invisible.
+ */
+function readWorkingDays(formData: FormData): string[] {
+  return formData
+    .getAll("workingDays")
+    .filter((value): value is string => typeof value === "string");
+}
+
 export async function createScheduleAction(
   _prev: ActionState,
   formData: FormData,
@@ -44,6 +58,7 @@ export async function createScheduleAction(
     endTime: formData.get("endTime"),
     lateToleranceMinutes: formData.get("lateToleranceMinutes"),
     breakMinutes: formData.get("breakMinutes"),
+    workingDays: readWorkingDays(formData),
     isActive: parseBoolean(formData.get("isActive")),
     makeDefault: parseBoolean(formData.get("makeDefault")),
   });
@@ -74,6 +89,7 @@ export async function updateScheduleAction(
     endTime: formData.get("endTime"),
     lateToleranceMinutes: formData.get("lateToleranceMinutes"),
     breakMinutes: formData.get("breakMinutes"),
+    workingDays: readWorkingDays(formData),
     isActive: parseBoolean(formData.get("isActive")),
     makeDefault: parseBoolean(formData.get("makeDefault")),
   });

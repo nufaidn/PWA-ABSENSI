@@ -84,12 +84,29 @@ export interface WorkSchedule {
   endTime: string;
   lateToleranceMinutes: number;
   breakMinutes: number;
+  /**
+   * Days of the week this schedule applies to, `0 = Minggu` … `6 = Sabtu`.
+   *
+   * Stored on the schedule rather than in the global settings so a shift can
+   * cover Saturday while another stays Monday–Friday. An empty list would make
+   * the schedule unusable, so the mapper falls back to Monday–Friday for
+   * documents written before this field existed.
+   */
+  workingDays: number[];
   isActive: boolean;
   isOrganizationDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
 
+/**
+ * Per-day overrides for a schedule.
+ *
+ * Not used by the Firestore data layer — the application stores a flat list of
+ * working days on the schedule itself — but kept because the shape is the
+ * natural extension point if a schedule ever needs different hours on
+ * Saturday than on Monday.
+ */
 export interface WorkScheduleDay {
   id: string;
   scheduleId: string;

@@ -81,7 +81,11 @@ export default async function EmployeesPage({
               createdAt: employee.createdAt.toISOString(),
               scheduleName: employee.schedule?.name ?? null,
             }))}
-            schedules={schedules.map((schedule) => ({ id: schedule.id, name: schedule.name }))}
+            schedules={schedules.map((schedule) => ({
+              id: schedule.id,
+              name: schedule.name,
+              workingDays: schedule.workingDays,
+            }))}
             canManageRoles={hasRole(user.role, "SUPER_ADMIN")}
             currentUserId={user.id}
           />

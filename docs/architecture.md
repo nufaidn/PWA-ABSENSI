@@ -87,7 +87,7 @@ tests/                   Unit test Vitest
 | Koleksi | Tujuan |
 | --- | --- |
 | `users/{userId}` | Akun karyawan/admin. Menyimpan `passwordHash` (bcrypt), `role`, `isActive`. |
-| `schedules/{scheduleId}` | Jadwal kerja: jam mulai, jam selesai, toleransi keterlambatan. |
+| `schedules/{scheduleId}` | Jadwal kerja: jam mulai, jam selesai, toleransi keterlambatan, dan hari kerja yang berlaku. |
 | `attendance/{userId}_{YYYY-MM-DD}` | Satu dokumen per karyawan per hari kerja. Sumber kebenaran kehadiran. |
 | `locations/{locationId}` | Geo-fence (pusat + radius) untuk validasi lokasi opsional. |
 | `settings/organization` | Konfigurasi global (zona waktu, jadwal default, wajib lokasi). |
@@ -116,6 +116,28 @@ dan agar "absen hari ini" konsisten definisinya di seluruh aplikasi.
 **`lateMinutes`** disimpan di database (bukan dihitung ulang saat baca) karena toleransi
 keterlambatan bisa diubah admin di kemudian waktu; menyimpan nilai saat kejadian terjadi menjaga
 riwayat tetap konsisten dengan keputusan yang berlaku waktu itu.
+
+### Hari kerja per jadwal
+
+Hari kerja disimpan **di dalam jadwal** (`schedules/{id}.workingDays`), bukan sebagai pengaturan
+global: `0 = Minggu` … `6 = Sabtu`. Setiap jadwal punya jam kerjanya sendiri, jadi jam kerja yang
+sama bisa berlaku Senin–Jumat untuk satu shift dan Senin–Sabtu untuk shift lain.
+
+Konsekuensinya:
+
+- Check-in hanya boleh dilakukan pada hari yang ada di `workingDays` jadwal karyawan; selain itu
+  `AttendanceError` dengan kode `NOT_A_WORKING_DAY`.
+- Halaman ringkasan, riwayat absensi, dan dashboard memakai hari kerja dari jadwal yang sama,
+  sehingga label "bukan hari kerja" selalu konsisten dengan aturan check-in.
+- Jadwal tanpa satu pun hari kerja ditolak saat disimpan (`Pilih minimal satu hari kerja.`),
+  karena jadwal seperti itu membuat seluruh karyawannya tidak bisa absen.
+- Dokumen lama yang belum punya field ini dibaca sebagai Senin–Jumat, sama dengan asumsi
+  aplikasi sebelum fieldnya ada. `npm run db:backfill-working-days` menuliskan nilainya secara
+  eksplisit.
+
+Di UI, pemilih hari berada di dialog "Tambah jadwal kerja": tujuh tombol hari (Senin–Minggu) plus
+preset cepat "Sen–Jum" dan "Semua hari". Setiap hari terpilih mengirim satu field `workingDays`,
+sehingga server menerima tepat hari-hari yang dicentang.
 
 ---
 

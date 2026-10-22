@@ -35,7 +35,7 @@ export function EmployeeRoster({
   currentUserId,
 }: {
   employees: RosterEntry[];
-  schedules: Array<{ id: string; name: string }>;
+  schedules: Array<{ id: string; name: string; workingDays: number[] }>;
   canManageRoles: boolean;
   currentUserId: string;
 }) {

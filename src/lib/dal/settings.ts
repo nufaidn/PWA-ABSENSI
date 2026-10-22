@@ -23,6 +23,8 @@ export interface EffectiveSchedule {
   endTime: string;
   lateToleranceMinutes: number;
   breakMinutes: number;
+  /** Days this schedule applies to, `0 = Minggu` … `6 = Sabtu`. */
+  workingDays: readonly number[];
   /** True when this came from the organization default rather than the user. */
   isOrganizationDefault: boolean;
 }
@@ -35,6 +37,7 @@ const FALLBACK_SCHEDULE: EffectiveSchedule = {
   endTime: "18:00",
   lateToleranceMinutes: 10,
   breakMinutes: 60,
+  workingDays: WEEKDAY_INDEXES,
   isOrganizationDefault: true,
 };
 
@@ -85,7 +88,13 @@ export const getEffectiveSchedule = cache(async (userId: string): Promise<Effect
 function toEffectiveSchedule(
   schedule: Pick<
     WorkSchedule,
-    "id" | "name" | "startTime" | "endTime" | "lateToleranceMinutes" | "breakMinutes"
+    | "id"
+    | "name"
+    | "startTime"
+    | "endTime"
+    | "lateToleranceMinutes"
+    | "breakMinutes"
+    | "workingDays"
   >,
   isOrganizationDefault: boolean,
 ): EffectiveSchedule {
@@ -96,6 +105,7 @@ function toEffectiveSchedule(
     endTime: schedule.endTime,
     lateToleranceMinutes: schedule.lateToleranceMinutes,
     breakMinutes: schedule.breakMinutes,
+    workingDays: schedule.workingDays,
     isOrganizationDefault,
   };
 }
@@ -104,7 +114,6 @@ export interface LocationPolicy {
   organizationName: string;
   timezone: string;
   requireLocationValidation: boolean;
-  workingDays: readonly number[];
 }
 
 /** Reads the singleton settings document, falling back to documented defaults. */
@@ -114,7 +123,6 @@ export const getLocationPolicy = cache(async (): Promise<LocationPolicy> => {
     organizationName: setting?.organizationName ?? "Universal Attendance",
     timezone: setting?.timezone ?? DEFAULT_TIMEZONE,
     requireLocationValidation: setting?.requireLocationValidation ?? false,
-    workingDays: WEEKDAY_INDEXES,
   };
 });
 
@@ -195,5 +203,11 @@ export const getActiveSchedules = cache(async () => {
     .map((doc) => toWorkSchedule(doc.id, doc.data()))
     .filter((schedule) => schedule.isActive)
     .sort((a, b) => a.name.localeCompare(b.name, "id"))
-    .map(({ id, name, startTime, endTime }) => ({ id, name, startTime, endTime }));
+    .map(({ id, name, startTime, endTime, workingDays }) => ({
+      id,
+      name,
+      startTime,
+      endTime,
+      workingDays,
+    }));
 });

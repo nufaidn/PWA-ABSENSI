@@ -21,13 +21,16 @@ import {
 } from "@/app/actions/admin-settings";
 import { INITIAL_ACTION_STATE, type ActionState } from "@/lib/action-state";
 import { Chip } from "@/components/layout/badges";
+import { cn } from "@/lib/utils";
+import { describeWorkingDays } from "@/lib/attendance/time";
 
 /**
  * Work schedule management.
  *
- * Work hours and late tolerance live here rather than in the global settings
- * screen because each schedule is independently assignable to employees; the
- * settings screen only chooses which schedule is the organization default.
+ * Work hours, late tolerance and the working days themselves live here rather
+ * than in the global settings screen because each schedule is independently
+ * assignable to employees; the settings screen only chooses which schedule is
+ * the organization default.
  */
 
 export interface ScheduleFormValues {
@@ -37,6 +40,8 @@ export interface ScheduleFormValues {
   endTime: string;
   lateToleranceMinutes: number;
   breakMinutes: number;
+  /** Days the schedule applies to, `0 = Minggu` … `6 = Sabtu`. */
+  workingDays: number[];
   isActive: boolean;
   isOrganizationDefault: boolean;
   assignedCount: number;
@@ -49,12 +54,114 @@ const EMPTY: ScheduleFormValues = {
   endTime: "18:00",
   lateToleranceMinutes: 10,
   breakMinutes: 60,
+  workingDays: [1, 2, 3, 4, 5],
   isActive: true,
   isOrganizationDefault: false,
   assignedCount: 0,
 };
 
+/**
+ * Day chips, Monday first.
+ *
+ * The stored index follows `Date.prototype.getUTCDay()` (0 = Minggu), but an
+ * admin reads a week from Monday, so the display order differs from the stored
+ * order.
+ */
+const DAY_CHOICES = [
+  { value: 1, label: "Senin" },
+  { value: 2, label: "Selasa" },
+  { value: 3, label: "Rabu" },
+  { value: 4, label: "Kamis" },
+  { value: 5, label: "Jumat" },
+  { value: 6, label: "Sabtu" },
+  { value: 0, label: "Minggu" },
+] as const;
+
+const WEEKDAYS_PRESET = [1, 2, 3, 4, 5];
+const EVERY_DAY_PRESET = [1, 2, 3, 4, 5, 6, 0];
+
+/**
+ * The days a schedule applies to.
+ *
+ * Selection lives in React state and is submitted as one hidden input per
+ * selected day, so the server receives exactly the days the admin ticked. A
+ * day that is not selected is not submitted at all — an empty selection is
+ * rejected by the schema instead of silently becoming Monday–Friday.
+ */
+function WorkingDaysField({
+  workingDays,
+  onChange,
+}: {
+  workingDays: number[];
+  onChange: (days: number[]) => void;
+}) {
+  const toggle = (day: number) => {
+    onChange(
+      workingDays.includes(day)
+        ? workingDays.filter((value) => value !== day)
+        : [...workingDays, day].sort((a, b) => a - b),
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Label>Hari kerja</Label>
+      <div className="flex flex-wrap gap-1.5">
+        {DAY_CHOICES.map((day) => {
+          const selected = workingDays.includes(day.value);
+          return (
+            <button
+              key={day.value}
+              type="button"
+              onClick={() => toggle(day.value)}
+              aria-pressed={selected}
+              className={cn(
+                "h-9 rounded-lg border px-3 text-[12.5px] font-medium transition-colors",
+                "focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-2",
+                selected
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              {day.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {workingDays.map((day) => (
+        <input key={day} type="hidden" name="workingDays" value={day} />
+      ))}
+
+      <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-muted-foreground">
+        <span>Pilih cepat:</span>
+        <button
+          type="button"
+          onClick={() => onChange([...WEEKDAYS_PRESET])}
+          className="rounded-md px-1.5 py-0.5 underline underline-offset-2 transition-colors hover:text-foreground"
+        >
+          Sen–Jum
+        </button>
+        <button
+          type="button"
+          onClick={() => onChange([...EVERY_DAY_PRESET])}
+          className="rounded-md px-1.5 py-0.5 underline underline-offset-2 transition-colors hover:text-foreground"
+        >
+          Semua hari
+        </button>
+      </div>
+
+      <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+        Karyawan dengan jadwal ini hanya bisa absen pada hari yang dipilih. Jadwal tanpa hari
+        kerja tidak dapat disimpan.
+      </p>
+    </div>
+  );
+}
+
 function ScheduleFields({ values }: { values: ScheduleFormValues }) {
+  const [workingDays, setWorkingDays] = React.useState<number[]>(values.workingDays);
+
   return (
     <div className="grid gap-4">
       <div className="flex flex-col gap-1.5">
@@ -129,6 +236,8 @@ function ScheduleFields({ values }: { values: ScheduleFormValues }) {
           </p>
         </div>
       </div>
+
+      <WorkingDaysField workingDays={workingDays} onChange={setWorkingDays} />
 
       <div className="flex flex-col gap-2.5 rounded-lg border border-border px-3.5 py-3">
         <label className="flex items-center gap-2.5 text-[13px]">
@@ -212,7 +321,7 @@ export function ScheduleDialog({
 
         <form action={formAction} className="flex flex-col gap-4">
           {schedule?.id ? <input type="hidden" name="id" value={schedule.id} /> : null}
-          <ScheduleFields values={values} />
+          <ScheduleFields key={values.id || "new"} values={values} />
 
           {state.fieldErrors ? (
             <ul className="space-y-1 rounded-lg bg-destructive/10 px-3.5 py-3 text-[12.5px] text-destructive">
@@ -319,6 +428,9 @@ export function ScheduleList({ schedules }: { schedules: ScheduleFormValues[] })
               <p className="tabular mt-0.5 text-[12px] text-muted-foreground">
                 {schedule.startTime}–{schedule.endTime} · toleransi {schedule.lateToleranceMinutes}{" "}
                 menit · istirahat {schedule.breakMinutes} menit
+              </p>
+              <p className="mt-0.5 text-[12px] text-muted-foreground">
+                Hari kerja: {describeWorkingDays(schedule.workingDays)}
               </p>
               <p className="mt-0.5 text-[11.5px] text-muted-foreground">
                 {schedule.assignedCount} karyawan memakai jadwal ini

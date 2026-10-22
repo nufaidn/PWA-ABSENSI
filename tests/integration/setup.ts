@@ -209,6 +209,7 @@ export const db = {
         endTime: data.endTime ?? "18:00",
         lateToleranceMinutes: data.lateToleranceMinutes ?? 0,
         breakMinutes: data.breakMinutes ?? 60,
+        workingDays: data.workingDays ?? [1, 2, 3, 4, 5],
         isActive: data.isActive ?? true,
         isOrganizationDefault: data.isOrganizationDefault ?? false,
         createdAt: now,
@@ -334,6 +335,8 @@ export interface ScheduleSeed {
   endTime?: string;
   lateToleranceMinutes?: number;
   breakMinutes?: number;
+  /** Days the schedule applies to, `0 = Minggu` … `6 = Sabtu`. */
+  workingDays?: number[];
   isDefault?: boolean;
 }
 
@@ -346,6 +349,7 @@ export async function seedSchedule(overrides: ScheduleSeed = {}) {
       endTime: overrides.endTime ?? "18:00",
       lateToleranceMinutes: overrides.lateToleranceMinutes ?? 10,
       breakMinutes: overrides.breakMinutes ?? 60,
+      workingDays: overrides.workingDays ?? [1, 2, 3, 4, 5],
       isOrganizationDefault: overrides.isDefault !== false,
       isActive: true,
     },

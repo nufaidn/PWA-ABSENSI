@@ -151,6 +151,7 @@ const SCHEDULES = [
     endTime: "18:00",
     lateToleranceMinutes: 10,
     breakMinutes: 60,
+    workingDays: [1, 2, 3, 4, 5],
     isDefault: true,
   },
   {
@@ -159,6 +160,7 @@ const SCHEDULES = [
     endTime: "15:00",
     lateToleranceMinutes: 5,
     breakMinutes: 45,
+    workingDays: [1, 2, 3, 4, 5, 6],
     isDefault: false,
   },
   {
@@ -167,6 +169,7 @@ const SCHEDULES = [
     endTime: "23:00",
     lateToleranceMinutes: 10,
     breakMinutes: 45,
+    workingDays: [1, 2, 3, 4, 5, 6],
     isDefault: false,
   },
   {
@@ -175,6 +178,7 @@ const SCHEDULES = [
     endTime: "15:00",
     lateToleranceMinutes: 15,
     breakMinutes: 0,
+    workingDays: [1, 2, 3, 4, 5],
     isDefault: false,
   },
 ];
@@ -272,6 +276,7 @@ async function main() {
       endTime: definition.endTime,
       lateToleranceMinutes: definition.lateToleranceMinutes,
       breakMinutes: definition.breakMinutes,
+      workingDays: definition.workingDays,
       isActive: true,
       isOrganizationDefault: definition.isDefault,
       createdAt: existing?.data().createdAt ?? now,

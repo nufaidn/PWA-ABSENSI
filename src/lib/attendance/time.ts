@@ -47,6 +47,27 @@ export const MONTH_NAMES = [
 
 export const WEEKDAY_INDEXES = [1, 2, 3, 4, 5] as const;
 
+/** Short day labels for compact chips, indexed like `DAY_NAMES`. */
+export const DAY_SHORT_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"] as const;
+
+/**
+ * Human readable summary of a set of working days.
+ *
+ * "Senin–Jumat" for a contiguous run, otherwise the short names joined with
+ * commas. Used in the schedule list and the employee schedule picker.
+ */
+export function describeWorkingDays(days: readonly number[]): string {
+  if (days.length === 0) return "Belum ada hari kerja";
+
+  const sorted = [...days].sort((a, b) => a - b);
+  const isContiguous = sorted.every((day, index) => index === 0 || day === sorted[index - 1] + 1);
+
+  if (isContiguous && sorted.length > 1) {
+    return `${DAY_NAMES[sorted[0]]}–${DAY_NAMES[sorted[sorted.length - 1]]}`;
+  }
+  return sorted.map((day) => DAY_SHORT_NAMES[day]).join(", ");
+}
+
 export interface WorkScheduleTimes {
   /** Wall-clock start, "HH:mm". */
   startTime: string;

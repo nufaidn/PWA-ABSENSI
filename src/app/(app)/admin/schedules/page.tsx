@@ -25,8 +25,8 @@ export default async function SchedulesPage() {
           Jadwal Kerja
         </h1>
         <p className="text-[13.5px] text-muted-foreground">
-          Jam mulai, toleransi keterlambatan, dan waktu istirahat yang berlaku untuk setiap
-          karyawan.
+          Jam mulai, hari kerja, toleransi keterlambatan, dan waktu istirahat yang berlaku untuk
+          setiap karyawan.
         </p>
       </header>
 
@@ -35,7 +35,8 @@ export default async function SchedulesPage() {
           Menit keterlambatan dihitung sejak jam mulai. karyawan yang datang sebelum{" "}
           <strong>jam mulai + toleransi</strong> tetap dihitung hadir. Nilai keterlambatan
           disimpan pada saat check-in sehingga mengubah jadwal di kemudian hari tidak mengubah
-          riwayat.
+          riwayat. Karyawan hanya bisa absen pada <strong>hari kerja</strong> yang dipilih pada
+          jadwalnya.
         </div>
 
         <Surface className="overflow-hidden">
@@ -54,6 +55,7 @@ export default async function SchedulesPage() {
               endTime: schedule.endTime,
               lateToleranceMinutes: schedule.lateToleranceMinutes,
               breakMinutes: schedule.breakMinutes,
+              workingDays: schedule.workingDays,
               isActive: schedule.isActive,
               isOrganizationDefault: schedule.isOrganizationDefault,
               assignedCount: schedule._count.users,

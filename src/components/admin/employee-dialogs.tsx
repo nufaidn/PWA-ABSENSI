@@ -4,6 +4,7 @@ import * as React from "react";
 import { useActionState, useEffect, useState } from "react";
 import { AlertCircle, CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { describeWorkingDays } from "@/lib/attendance/time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +56,8 @@ export interface EmployeeFormValues {
 interface ScheduleOption {
   id: string;
   name: string;
+  /** Days the schedule applies to, `0 = Minggu` … `6 = Sabtu`. */
+  workingDays: number[];
 }
 
 const EMPTY: EmployeeFormValues = {
@@ -182,7 +185,7 @@ const [role, setRole] = useState<Role>(values.role);
           <option value="">Gunakan jadwal default organisasi</option>
           {schedules.map((schedule) => (
             <option key={schedule.id} value={schedule.id}>
-              {schedule.name}
+              {schedule.name} · {describeWorkingDays(schedule.workingDays)}
             </option>
           ))}
         </select>

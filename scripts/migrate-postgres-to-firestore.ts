@@ -166,6 +166,15 @@ async function main(): Promise<void> {
 
     for (const schedule of schedules) {
       const id = String(schedule.id);
+      // The old per-day rows become the flat list of working days the schedule
+      // applies to. Schedules without day rows fall back to Monday–Friday.
+      const workingDays = (daysBySchedule.get(id) ?? [])
+        .filter((day) => day.isWorkingDay === true)
+        .map((day) => day.dayOfWeek)
+        .filter(
+          (day): day is number =>
+            typeof day === "number" && Number.isInteger(day) && day >= 0 && day <= 6,
+        );
       writes.push({
         ref: firestore.collection(COLLECTIONS.schedules).doc(id),
         data: {
@@ -175,6 +184,8 @@ async function main(): Promise<void> {
           endTime: schedule.endTime,
           lateToleranceMinutes: schedule.lateToleranceMinutes ?? 0,
           breakMinutes: schedule.breakMinutes ?? 60,
+          workingDays:
+            workingDays.length > 0 ? [...new Set(workingDays)].sort((a, b) => a - b) : [1, 2, 3, 4, 5],
           isActive: schedule.isActive !== false,
           isOrganizationDefault: schedule.isOrganizationDefault === true,
           days: daysBySchedule.get(id) ?? [],

@@ -136,6 +136,7 @@ describe("scheduleSchema", () => {
     endTime: "17:00",
     lateToleranceMinutes: 10,
     breakMinutes: 60,
+    workingDays: [1, 2, 3, 4, 5],
   };
 
   it("coerces numeric fields from FormData strings", () => {
@@ -148,6 +149,27 @@ describe("scheduleSchema", () => {
     const result = scheduleSchema.parse(valid);
     expect(result.isActive).toBe(true);
     expect(result.makeDefault).toBe(false);
+  });
+
+  it("coerces the working days coming from the form", () => {
+    const result = scheduleSchema.parse({ ...valid, workingDays: ["1", "2", "6"] });
+    expect(result.workingDays).toEqual([1, 2, 6]);
+  });
+
+  it("sorts and deduplicates the working days", () => {
+    const result = scheduleSchema.parse({ ...valid, workingDays: [6, 1, 6, 3] });
+    expect(result.workingDays).toEqual([1, 3, 6]);
+  });
+
+  it("rejects a schedule without a single working day", () => {
+    const result = scheduleSchema.safeParse({ ...valid, workingDays: [] });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.issues[0].path).toEqual(["workingDays"]);
+  });
+
+  it("rejects a day outside the week", () => {
+    expect(scheduleSchema.safeParse({ ...valid, workingDays: [1, 7] }).success).toBe(false);
+    expect(scheduleSchema.safeParse({ ...valid, workingDays: [-1] }).success).toBe(false);
   });
 
   it("rejects identical start and end times", () => {

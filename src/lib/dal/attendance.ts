@@ -108,7 +108,10 @@ export async function getAttendanceContext(
     requireLocation: policy.requireLocationValidation,
     timezone: policy.timezone,
     organizationName: policy.organizationName,
-    workingDays: policy.workingDays,
+    // The working days belong to the schedule the employee is on, so a shift
+    // that covers Saturday makes Saturday a working day for exactly those
+    // employees who are assigned to it.
+    workingDays: schedule.workingDays,
   };
 }
 

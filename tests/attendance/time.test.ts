@@ -4,6 +4,7 @@ import {
   ROLE_LABEL,
   ROLE_RANK,
   addDaysToDateKey,
+  describeWorkingDays,
   enumerateDateKeys,
   formatDateKey,
   formatDuration,
@@ -103,6 +104,17 @@ describe("calendar arithmetic", () => {
   it("honours a custom working-day set", () => {
     expect(isWorkingDay("2026-10-11", [0, 6])).toBe(true);
     expect(isWorkingDay("2026-10-12", [0, 6])).toBe(false);
+  });
+
+  it("describes a contiguous week as a range", () => {
+    expect(describeWorkingDays([1, 2, 3, 4, 5])).toBe("Senin–Jumat");
+    expect(describeWorkingDays([1, 2, 3, 4, 5, 6])).toBe("Senin–Sabtu");
+    expect(describeWorkingDays([0])).toBe("Min");
+  });
+
+  it("lists the day names when the week has a gap", () => {
+    expect(describeWorkingDays([1, 3, 5])).toBe("Sen, Rab, Jum");
+    expect(describeWorkingDays([])).toBe("Belum ada hari kerja");
   });
 
   it("adds days across month and year boundaries", () => {
