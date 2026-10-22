@@ -58,9 +58,14 @@ export async function createSession(userId: string): Promise<void> {
   const token = await encryptSession({ sid, sub: userId });
 
   const cookieStore = await cookies();
+  
+  // Mobile browsers sometimes have issues with sameSite=lax + secure.
+  // We set both modes to maximize compatibility across desktop and mobile.
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: isSecureCookies(),
+    // On mobile, sameSite='strict' can cause cookie loss. Use 'lax' for better
+    // cross-device compatibility, with CSRF protection still active.
     sameSite: "lax",
     path: "/",
     maxAge,

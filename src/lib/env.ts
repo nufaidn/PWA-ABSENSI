@@ -58,6 +58,12 @@ export function getSessionMaxAge(): number {
 }
 
 export function isSecureCookies(): boolean {
+  // Use secure cookies in production. However, on Vercel deployments that might
+  // have HTTPS issues or redirect loops due to HTTP/HTTPS mismatch, this can be
+  // overridden with DISABLE_SECURE_COOKIES=true (development / debugging only).
+  if (process.env.DISABLE_SECURE_COOKIES === "true") {
+    return false;
+  }
   return process.env.NODE_ENV === "production";
 }
 

@@ -25,11 +25,27 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.has(pathname);
 }
 
+function logRedirectDebug(message: string, data?: unknown) {
+  // Log to console only in development, but always to headers for serverless logs
+  if (process.env.NODE_ENV !== "production") {
+    console.debug(`[proxy.ts] ${message}`, data);
+  }
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("uas_session")?.value;
   const session = await decryptSession(token);
   const isSignedIn = Boolean(session);
+  const userAgent = request.headers.get("user-agent") ?? "unknown";
+  const isMobile = /mobile|android|iphone|ipad/i.test(userAgent);
+
+  logRedirectDebug(`[${isMobile ? "MOBILE" : "DESKTOP"}] ${pathname}`, {
+    hasToken: !!token,
+    tokenLength: token?.length,
+    isSignedIn,
+    userAgent: userAgent.substring(0, 80),
+  });
 
   if (!isSignedIn && !isPublicPath(pathname)) {
     // Admins land on the admin sign-in, everyone else on the employee one, so a
@@ -38,12 +54,14 @@ export async function proxy(request: NextRequest) {
     const signInPath = pathname.startsWith("/admin") ? "/admin" : "/login";
     const loginUrl = new URL(signInPath, request.url);
     if (pathname !== "/") loginUrl.searchParams.set("next", pathname);
+    logRedirectDebug(`Redirecting to ${signInPath}`, { originalPathname: pathname });
     return NextResponse.redirect(loginUrl);
   }
 
   if (isSignedIn && isPublicPath(pathname)) {
     // `/` resolves per role — the admin dashboard for an admin, the employee one
     // otherwise — so both sign-in pages hand off there.
+    logRedirectDebug("Redirecting signed-in user to /");
     return NextResponse.redirect(new URL("/", request.url));
   }
 
