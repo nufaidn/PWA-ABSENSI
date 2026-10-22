@@ -22,6 +22,29 @@ import { getFirestore, type Firestore } from "firebase-admin/firestore";
  * still failing loudly at request time if the deployment is misconfigured.
  */
 
+/**
+ * Raised when the deployment is missing the credentials needed to reach
+ * Firestore.
+ *
+ * This is a *deployment* problem, not a user problem, so it gets its own type:
+ * the login flow can then show "the server is not configured" instead of the
+ * generic "something went wrong" page, which is the difference between a
+ * five-minute fix and an hour of guesswork.
+ */
+export class FirebaseConfigurationError extends Error {
+  readonly missing: string[];
+
+  constructor(missing: string[], message?: string) {
+    super(
+      message ??
+        `Firebase is not configured. Missing environment variable(s): ${missing.join(", ")}. ` +
+          "See .env.example.",
+    );
+    this.name = "FirebaseConfigurationError";
+    this.missing = missing;
+  }
+}
+
 function normalizePrivateKey(value: string): string {
   return value.replace(/\\n/g, "\n");
 }
@@ -37,13 +60,23 @@ function parseServiceAccount(raw: string): {
   const text = raw.trim().startsWith("{")
     ? raw
     : Buffer.from(raw, "base64").toString("utf8");
-  const parsed = JSON.parse(text) as {
+  let parsed: {
     project_id?: string;
     client_email?: string;
     private_key?: string;
   };
+  try {
+    parsed = JSON.parse(text) as typeof parsed;
+  } catch {
+    throw new FirebaseConfigurationError(
+      ["FIREBASE_SERVICE_ACCOUNT_JSON"],
+      "FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON (or valid base64 of JSON). " +
+        "Copy the whole service-account JSON as a single line.",
+    );
+  }
   if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
-    throw new Error(
+    throw new FirebaseConfigurationError(
+      ["FIREBASE_SERVICE_ACCOUNT_JSON"],
       "FIREBASE_SERVICE_ACCOUNT_JSON is missing project_id, client_email or private_key.",
     );
   }
@@ -51,6 +84,109 @@ function parseServiceAccount(raw: string): {
     projectId: parsed.project_id,
     clientEmail: parsed.client_email,
     privateKey: normalizePrivateKey(parsed.private_key),
+  };
+}
+
+/**
+ * How the Firebase Admin SDK is expected to authenticate, derived purely from
+ * the environment.
+ *
+ * Used by `/api/health` so a misconfigured deployment can be diagnosed with a
+ * single request instead of by reading server logs. It never returns secret
+ * values — only names of variables and the project id.
+ */
+export interface FirebaseConfigStatus {
+  /** True when the environment carries everything needed to reach Firestore. */
+  configured: boolean;
+  projectId: string | null;
+  /** Which credential style the deployment uses. */
+  source: "emulator" | "service-account-json" | "client-email" | "application-default" | null;
+  /** Names of the variables that still have to be set (empty when configured). */
+  missing: string[];
+  /** Human readable reason when `configured` is false. */
+  problem: string | null;
+}
+
+export function getFirebaseConfigStatus(): FirebaseConfigStatus {
+  const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+  const projectId =
+    process.env.FIREBASE_PROJECT_ID ??
+    process.env.GCLOUD_PROJECT ??
+    (emulatorHost ? "demo-attendance" : undefined);
+
+  if (emulatorHost) {
+    return projectId
+      ? { configured: true, projectId, source: "emulator", missing: [], problem: null }
+      : {
+          configured: false,
+          projectId: null,
+          source: null,
+          missing: ["FIREBASE_PROJECT_ID"],
+          problem: "FIREBASE_PROJECT_ID is required when using the Firestore emulator.",
+        };
+  }
+
+  const serviceAccountRaw =
+    process.env.FIREBASE_SERVICE_ACCOUNT_JSON ?? process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (serviceAccountRaw) {
+    try {
+      const account = parseServiceAccount(serviceAccountRaw);
+      return {
+        configured: true,
+        projectId: account.projectId,
+        source: "service-account-json",
+        missing: [],
+        problem: null,
+      };
+    } catch (error) {
+      return {
+        configured: false,
+        projectId: projectId ?? null,
+        source: null,
+        missing: ["FIREBASE_SERVICE_ACCOUNT_JSON"],
+        problem: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  if (projectId && clientEmail && privateKey) {
+    return {
+      configured: true,
+      projectId,
+      source: "client-email",
+      missing: [],
+      problem: null,
+    };
+  }
+
+  if (projectId) {
+    // Application Default Credentials: GOOGLE_APPLICATION_CREDENTIALS or the
+    // GCE metadata server. Only useful on machines/VMs that already have a
+    // service account attached.
+    return {
+      configured: true,
+      projectId,
+      source: "application-default",
+      missing: [],
+      problem: null,
+    };
+  }
+
+  const missing = ["FIREBASE_PROJECT_ID"];
+  if (!clientEmail || !privateKey) {
+    missing.push("FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY (or FIREBASE_SERVICE_ACCOUNT_JSON)");
+  }
+  return {
+    configured: false,
+    projectId: null,
+    source: null,
+    missing,
+    problem:
+      "Firebase is not configured. Set FIREBASE_PROJECT_ID and either " +
+      "FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY. " +
+      "See .env.example.",
   };
 }
 
@@ -63,7 +199,10 @@ function createApp(): App {
 
   if (emulatorHost) {
     if (!projectId) {
-      throw new Error("FIREBASE_PROJECT_ID is required when using the Firestore emulator.");
+      throw new FirebaseConfigurationError(
+        ["FIREBASE_PROJECT_ID"],
+        "FIREBASE_PROJECT_ID is required when using the Firestore emulator.",
+      );
     }
     // The emulator accepts unauthenticated clients; no service account needed.
     return initializeApp({ projectId });
@@ -102,11 +241,10 @@ function createApp(): App {
     return initializeApp({ credential: applicationDefault(), projectId });
   }
 
-  throw new Error(
-    "Firebase is not configured. Set FIREBASE_PROJECT_ID and either " +
-      "FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY. " +
-      "See .env.example.",
-  );
+  throw new FirebaseConfigurationError([
+    "FIREBASE_PROJECT_ID",
+    "FIREBASE_SERVICE_ACCOUNT_JSON (or FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY)",
+  ]);
 }
 
 let cached: Firestore | null = null;

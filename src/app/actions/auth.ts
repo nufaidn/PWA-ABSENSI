@@ -16,6 +16,8 @@ import {
 import { assertUser, getCurrentUserUncached } from "@/lib/dal/auth";
 import { createSession, destroySession } from "@/lib/session";
 import { hasRole } from "@/lib/attendance/time";
+import { MissingEnvironmentVariableError } from "@/lib/env";
+import { FirebaseConfigurationError } from "@/lib/firebase-config";
 
 /**
  * Authentication Server Actions.
@@ -43,6 +45,27 @@ function safeRedirectTarget(next: string | undefined): string | null {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : null;
 }
 
+/**
+ * Turns a deployment misconfiguration into a message the user can act on.
+ *
+ * A missing `FIREBASE_*` variable or `AUTH_SECRET` is an operator problem, not
+ * a wrong-password problem. Left unhandled it bubbles up to the root error
+ * boundary and the operator sees a generic "Terjadi kesalahan" page with a
+ * reference code and no hint. Caught here it becomes a plain sentence naming
+ * the variable that has to be set.
+ *
+ * Returns null for every other error so real failures keep their stack trace.
+ */
+function configurationMessage(error: unknown): string | null {
+  if (error instanceof FirebaseConfigurationError) {
+    return "Server belum dikonfigurasi: kredensial Firebase belum lengkap. Hubungi admin.";
+  }
+  if (error instanceof MissingEnvironmentVariableError) {
+    return `Server belum dikonfigurasi: variabel ${error.variable} belum diset. Hubungi admin.`;
+  }
+  return null;
+}
+
 /** Employee sign-in. Accepts an employee code or, as a fallback, an email. */
 export async function loginAction(
   _prev: LoginState,
@@ -58,7 +81,14 @@ export async function loginAction(
     return { fieldErrors: fieldErrors(parsed.error) };
   }
 
-  const user = await verifyCredentials(parsed.data.identifier, parsed.data.password);
+  let user: Awaited<ReturnType<typeof verifyCredentials>>;
+  try {
+    user = await verifyCredentials(parsed.data.identifier, parsed.data.password);
+  } catch (error) {
+    const message = configurationMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
 
   // One generic message for both "unknown account" and "wrong password" so the
   // form cannot be used to discover which accounts exist.
@@ -66,8 +96,13 @@ export async function loginAction(
     return { error: "ID Karyawan atau password salah, atau akun sedang dinonaktifkan." };
   }
 
-  await createSession(user.id);
-
+  try {
+    await createSession(user.id);
+  } catch (error) {
+    const message = configurationMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
   const safeNext = safeRedirectTarget(parsed.data.next);
   if (safeNext) redirect(safeNext);
 
@@ -95,7 +130,14 @@ export async function adminLoginAction(
     return { fieldErrors: fieldErrors(parsed.error) };
   }
 
-  const user = await verifyAdminCredentials(parsed.data.identifier, parsed.data.password);
+  let user: Awaited<ReturnType<typeof verifyAdminCredentials>>;
+  try {
+    user = await verifyAdminCredentials(parsed.data.identifier, parsed.data.password);
+  } catch (error) {
+    const message = configurationMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
 
   // Deliberately identical wording to the employee form. Saying "this account is
   // not an administrator" would confirm that the credentials were correct.
@@ -103,7 +145,13 @@ export async function adminLoginAction(
     return { error: "Email atau password salah, atau akun sedang dinonaktifkan." };
   }
 
-  await createSession(user.id);
+  try {
+    await createSession(user.id);
+  } catch (error) {
+    const message = configurationMessage(error);
+    if (message) return { error: message };
+    throw error;
+  }
 
   const safeNext = safeRedirectTarget(parsed.data.next);
   if (safeNext) redirect(safeNext);

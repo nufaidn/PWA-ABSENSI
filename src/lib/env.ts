@@ -10,12 +10,29 @@ import "server-only";
 
 const SESSION_MAX_AGE_FALLBACK = 60 * 60 * 24 * 7; // 7 days
 
+/**
+ * Raised when a required environment variable is absent.
+ *
+ * Like `FirebaseConfigurationError`, this exists so the UI can say "the server
+ * is not configured, variable X is missing" instead of showing a generic error
+ * page that gives the operator nothing to act on.
+ */
+export class MissingEnvironmentVariableError extends Error {
+  readonly variable: string;
+
+  constructor(variable: string) {
+    super(
+      `Missing required environment variable ${variable}. See .env.example for the expected values.`,
+    );
+    this.name = "MissingEnvironmentVariableError";
+    this.variable = variable;
+  }
+}
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
-    throw new Error(
-      `Missing required environment variable ${name}. See .env.example for the expected values.`,
-    );
+    throw new MissingEnvironmentVariableError(name);
   }
   return value;
 }

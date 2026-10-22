@@ -49,6 +49,7 @@ src/
       profile/           Profil & ganti password
     api/
       attendance/export  Route handler CSV export
+      health             Diagnosa deployment (kredensial + jangkauan Firestore)
     manifest.ts          Web App Manifest
   components/
     ui/                  Komponen dasar bergaya shadcn/ui
@@ -257,10 +258,40 @@ Environment yang dibutuhkan:
 | `FIREBASE_CLIENT_EMAIL` + `FIREBASE_PRIVATE_KEY` | Service account (cara utama). |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Alternatif: JSON service account dalam satu baris/base64. |
 | `FIRESTORE_EMULATOR_HOST` | Hanya untuk test lokal; diisi otomatis oleh `firebase emulators:exec`. |
+| `AUTH_SECRET` | Kunci penandatangan cookie sesi (HS256), minimal 32 karakter. |
 
 `firestore.rules` menolak semua akses klien (`allow read, write: if false`). Aturan itu bukan
 satu-satunya lapisan: Admin SDK memang mem-bypass rules, dan browser tidak pernah memegang
 kredensial Firebase.
+
+#### Vercel: variabel tidak otomatis ikut
+
+`npm run dev`/`npm start` membaca `.env` di repo. Deployment Vercel **tidak** punya file itu —
+ia hanya melihat variabel yang diisi di dashboard (Settings → Environment Variables), dan itu
+hanya berlaku untuk environment yang dipilih (Production / Preview / Development). Kalau satu
+variabel kredensial tidak ikut, semua pembacaan Firestore gagal dan layar login menampilkan
+"Terjadi kesalahan" tanpa penjelasan — karena halaman login sendiri tidak pernah menyentuh
+database, jadi ia tetap bisa render.
+
+Checklist sebelum deploy:
+
+1. `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` — isi untuk **semua**
+   environment, lalu redeploy (perubahan env var butuh redeploy baru).
+2. `FIREBASE_PRIVATE_KEY` ditulis sebagai satu baris dengan newline escaped (`-----BEGIN PRIVATE
+   KEY-----\n...\n-----END PRIVATE KEY-----\n`). Kode menormalkan `\n` otomatis, jadi tidak perlu
+   menyalin newline asli ke dashboard.
+3. `AUTH_SECRET` diisi dengan nilai yang sama di semua environment. Mengganti `AUTH_SECRET`
+   membuat semua sesi lama tidak valid (user harus login ulang).
+
+Verifikasi deployment tanpa membuka log server:
+
+```bash
+curl -s https://<domain>/api/health
+```
+
+Endpoint itu melaporkan apakah kredensial ada, project id yang dipakai, dan apakah Firestore
+bisa dibaca — tanpa membocorkan nilai rahasia. `503` berarti kredensial belum lengkap;
+`200` berarti jalur database siap.
 
 Perintah operasional:
 
