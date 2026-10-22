@@ -24,6 +24,7 @@ vi.mock("@/app/actions/admin-settings", () => ({
 const VALUES: ScheduleFormValues = {
   id: "",
   name: "Shift",
+  description: "",
   startTime: "09:00",
   endTime: "18:00",
   lateToleranceMinutes: 10,
@@ -84,5 +85,19 @@ describe("schedule working days", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Sen–Jum" }));
     expect(selectedDays().sort()).toEqual(["1", "2", "3", "4", "5"]);
+  });
+
+  it("carries the note into the form", () => {
+    render(
+      <ScheduleDialog
+        open
+        onOpenChange={() => {}}
+        schedule={{ ...VALUES, description: "Khusus hari Sabtu, jam kerja 08:00-14:00." }}
+      />,
+    );
+
+    const note = screen.getByLabelText("Catatan (opsional)") as HTMLTextAreaElement;
+    expect(note.value).toBe("Khusus hari Sabtu, jam kerja 08:00-14:00.");
+    expect(note.getAttribute("name")).toBe("description");
   });
 });

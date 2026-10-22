@@ -37,6 +37,7 @@ const DATA: AttendanceCardData = {
   startTime: "09:00",
   endTime: "18:00",
   lateToleranceMinutes: 10,
+  scheduleNote: null,
   requireLocation: false,
   isWorkingDay: true,
   timezone: "Asia/Jakarta",

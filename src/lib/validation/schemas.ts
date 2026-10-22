@@ -182,6 +182,20 @@ export const deleteEmployeeSchema = z.object({
 export const scheduleSchema = z
   .object({
     name: trimmedName,
+    /**
+     * Free-form note about the schedule — for example "Khusus hari Sabtu jam
+     * kerja 08:00-14:00".
+     *
+     * Documentation only: it never changes how lateness or duration are
+     * computed. It exists so the rule can be written down where the schedule
+     * itself is managed, instead of in a chat message nobody finds later.
+     */
+    description: z
+      .string()
+      .trim()
+      .max(240, "Catatan maksimal 240 karakter.")
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : null)),
     startTime: timeString,
     endTime: timeString,
     lateToleranceMinutes: z.coerce.number().int().min(0).max(240),

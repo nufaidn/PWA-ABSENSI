@@ -139,6 +139,16 @@ Di UI, pemilih hari berada di dialog "Tambah jadwal kerja": tujuh tombol hari (S
 preset cepat "Sen–Jum" dan "Semua hari". Setiap hari terpilih mengirim satu field `workingDays`,
 sehingga server menerima tepat hari-hari yang dicentang.
 
+### Catatan jadwal
+
+`schedules/{id}.description` menyimpan catatan bebas (maks. 240 karakter), misalnya "Khusus hari
+Sabtu, jam kerja 08:00–14:00". Catatan tampil di daftar jadwal (sisi admin) dan di beranda
+karyawan, tepat di bawah jam kerja.
+
+Catatan ini **dokumentasi saja**: perhitungan keterlambatan, durasi, dan penolakan di luar jam
+tetap memakai `startTime`/`endTime` jadwal. Aturan yang benar-benar berbeda per hari (misalnya
+batas jam kerja Sabtu lebih pendek) butuh jam khusus per hari, yang belum ada di model data.
+
 ---
 
 ## 4. Autentikasi & Otorisasi

@@ -46,6 +46,8 @@ export interface AttendanceCardData {
   startTime: string;
   endTime: string;
   lateToleranceMinutes: number;
+  /** Free-form note from the schedule, e.g. "Khusus Sabtu jam kerja 08:00-14:00". */
+  scheduleNote: string | null;
   requireLocation: boolean;
   isWorkingDay: boolean;
   timezone: string;
@@ -219,6 +221,11 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
               ? ` · toleransi ${data.lateToleranceMinutes} menit`
               : " · tanpa toleransi"}
           </p>
+          {data.scheduleNote ? (
+            <p className="mt-1 text-[12px] italic leading-relaxed text-muted-foreground">
+              {data.scheduleNote}
+            </p>
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 divide-x divide-border border-b border-border">

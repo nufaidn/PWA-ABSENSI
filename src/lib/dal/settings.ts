@@ -19,6 +19,8 @@ import { DEFAULT_TIMEZONE, WEEKDAY_INDEXES } from "@/lib/attendance/time";
 export interface EffectiveSchedule {
   id: string;
   name: string;
+  /** Free-form note about the schedule, shown to employees. */
+  description: string | null;
   startTime: string;
   endTime: string;
   lateToleranceMinutes: number;
@@ -33,6 +35,7 @@ export interface EffectiveSchedule {
 const FALLBACK_SCHEDULE: EffectiveSchedule = {
   id: "fallback",
   name: "Jam Kerja Default",
+  description: null,
   startTime: "09:00",
   endTime: "18:00",
   lateToleranceMinutes: 10,
@@ -90,6 +93,7 @@ function toEffectiveSchedule(
     WorkSchedule,
     | "id"
     | "name"
+    | "description"
     | "startTime"
     | "endTime"
     | "lateToleranceMinutes"
@@ -101,6 +105,7 @@ function toEffectiveSchedule(
   return {
     id: schedule.id,
     name: schedule.name,
+    description: schedule.description,
     startTime: schedule.startTime,
     endTime: schedule.endTime,
     lateToleranceMinutes: schedule.lateToleranceMinutes,

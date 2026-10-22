@@ -6,6 +6,7 @@ import { AlertCircle, CheckCircle2, Loader2, Pencil, Plus, Star, Trash2 } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +37,8 @@ import { describeWorkingDays } from "@/lib/attendance/time";
 export interface ScheduleFormValues {
   id: string;
   name: string;
+  /** Free-form note shown to employees, e.g. "Khusus Sabtu jam kerja 08:00-14:00". */
+  description: string;
   startTime: string;
   endTime: string;
   lateToleranceMinutes: number;
@@ -50,6 +53,7 @@ export interface ScheduleFormValues {
 const EMPTY: ScheduleFormValues = {
   id: "",
   name: "",
+  description: "",
   startTime: "09:00",
   endTime: "18:00",
   lateToleranceMinutes: 10,
@@ -174,6 +178,23 @@ function ScheduleFields({ values }: { values: ScheduleFormValues }) {
           placeholder="Jam Kerja Reguler"
           className="min-h-10"
         />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="schedule-description">Catatan (opsional)</Label>
+        <Textarea
+          id="schedule-description"
+          name="description"
+          rows={2}
+          maxLength={240}
+          defaultValue={values.description}
+          placeholder="Khusus hari Sabtu, jam kerja 08:00–14:00."
+          className="min-h-16 text-[13.5px]"
+        />
+        <p className="text-[11.5px] leading-relaxed text-muted-foreground">
+          Catatan ikut ditampilkan ke karyawan di beranda mereka. Catatan hanya dokumentasi — jam
+          kerja yang dihitung tetap memakai jam di atas.
+        </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -432,6 +453,11 @@ export function ScheduleList({ schedules }: { schedules: ScheduleFormValues[] })
               <p className="mt-0.5 text-[12px] text-muted-foreground">
                 Hari kerja: {describeWorkingDays(schedule.workingDays)}
               </p>
+              {schedule.description ? (
+                <p className="mt-0.5 text-[12px] italic text-muted-foreground">
+                  {schedule.description}
+                </p>
+              ) : null}
               <p className="mt-0.5 text-[11.5px] text-muted-foreground">
                 {schedule.assignedCount} karyawan memakai jadwal ini
               </p>

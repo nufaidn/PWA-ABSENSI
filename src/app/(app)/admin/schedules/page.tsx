@@ -51,6 +51,7 @@ export default async function SchedulesPage() {
             schedules={schedules.map((schedule) => ({
               id: schedule.id,
               name: schedule.name,
+              description: schedule.description ?? "",
               startTime: schedule.startTime,
               endTime: schedule.endTime,
               lateToleranceMinutes: schedule.lateToleranceMinutes,

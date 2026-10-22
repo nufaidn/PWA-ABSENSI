@@ -161,6 +161,7 @@ const SCHEDULES = [
     lateToleranceMinutes: 5,
     breakMinutes: 45,
     workingDays: [1, 2, 3, 4, 5, 6],
+    description: "Khusus hari Sabtu, jam kerja hanya berlangsung 07:00–13:00.",
     isDefault: false,
   },
   {
@@ -271,7 +272,7 @@ async function main() {
     const id = existing?.id ?? crypto.randomUUID();
     const data = {
       name: definition.name,
-      description: null,
+      description: definition.description ?? null,
       startTime: definition.startTime,
       endTime: definition.endTime,
       lateToleranceMinutes: definition.lateToleranceMinutes,

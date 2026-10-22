@@ -54,6 +54,7 @@ export async function createScheduleAction(
 ): Promise<ActionState> {
   const parsed = scheduleSchema.safeParse({
     name: formData.get("name"),
+    description: formData.get("description") ?? undefined,
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
     lateToleranceMinutes: formData.get("lateToleranceMinutes"),
@@ -85,6 +86,7 @@ export async function updateScheduleAction(
 
   const parsed = scheduleSchema.safeParse({
     name: formData.get("name"),
+    description: formData.get("description") ?? undefined,
     startTime: formData.get("startTime"),
     endTime: formData.get("endTime"),
     lateToleranceMinutes: formData.get("lateToleranceMinutes"),

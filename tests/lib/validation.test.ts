@@ -167,6 +167,20 @@ describe("scheduleSchema", () => {
     if (!result.success) expect(result.error.issues[0].path).toEqual(["workingDays"]);
   });
 
+  it("keeps the note and turns an empty one into null", () => {
+    const result = scheduleSchema.parse({
+      ...valid,
+      description: "  Khusus hari Sabtu, jam kerja 08:00-14:00.  ",
+    });
+    expect(result.description).toBe("Khusus hari Sabtu, jam kerja 08:00-14:00.");
+    expect(scheduleSchema.parse({ ...valid, description: "" }).description).toBeNull();
+    expect(scheduleSchema.parse(valid).description).toBeNull();
+  });
+
+  it("rejects a note that is too long", () => {
+    expect(scheduleSchema.safeParse({ ...valid, description: "x".repeat(241) }).success).toBe(false);
+  });
+
   it("rejects a day outside the week", () => {
     expect(scheduleSchema.safeParse({ ...valid, workingDays: [1, 7] }).success).toBe(false);
     expect(scheduleSchema.safeParse({ ...valid, workingDays: [-1] }).success).toBe(false);

@@ -590,6 +590,8 @@ export async function changeOwnPassword(currentPassword: string, newPassword: st
 
 export interface ScheduleInput {
   name: string;
+  /** Free-form note shown to employees and administrators. */
+  description: string | null;
   startTime: string;
   endTime: string;
   lateToleranceMinutes: number;
@@ -627,7 +629,7 @@ export async function createSchedule(input: ScheduleInput): Promise<ScheduleWith
 
     const data = {
       name: input.name.trim(),
-      description: null,
+      description: input.description ?? null,
       startTime: input.startTime,
       endTime: input.endTime,
       lateToleranceMinutes: input.lateToleranceMinutes,
@@ -674,6 +676,7 @@ export async function updateSchedule(id: string, input: ScheduleInput): Promise<
 
     const data = {
       name: input.name.trim(),
+      description: input.description ?? null,
       startTime: input.startTime,
       endTime: input.endTime,
       lateToleranceMinutes: input.lateToleranceMinutes,
