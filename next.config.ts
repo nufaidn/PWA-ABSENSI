@@ -35,6 +35,31 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["firebase-admin"],
 
   /**
+   * Hosts that may load dev-only assets (`/_next/*`, HMR, Server Action
+   * responses) while running `next dev`.
+   *
+   * Next.js 16 blocks cross-origin requests to those endpoints by default. The
+   * dev server counts only `localhost` and the hostname it was started with as
+   * same-origin, so a phone opening `http://192.168.x.x:3000` had every JS and
+   * CSS chunk answered with `403 Unauthorized`: the HTML arrived, the styling
+   * and hydration did not, and the app looked broken on the phone while working
+   * fine on the laptop.
+   *
+   * Only the hostname is matched (no scheme, no port), and `*` matches exactly
+   * one label. Wildcards keep this working when DHCP hands out a new LAN
+   * address or Tailscale changes its 100.x address. These entries are ignored
+   * in production.
+   */
+  allowedDevOrigins: [
+    "192.168.*.*", // private LAN (RFC 1918)
+    "10.*.*.*", // private LAN (RFC 1918)
+    "172.*.*.*", // private LAN (RFC 1918, docker/VPN ranges)
+    "100.*.*.*", // Tailscale / CGNAT
+    "*.local", // mDNS names, e.g. laptop.local
+    "*.ts.net", // Tailscale MagicDNS
+  ],
+
+  /**
    * Tailwind v4 is not a plain stylesheet: `@theme`, `@utility` and `@apply`
    * are Tailwind-specific at-rules that Turbopack's built-in CSS pipeline does
    * not understand. Without this loader the raw directives are passed straight

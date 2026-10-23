@@ -1,5 +1,44 @@
 # Troubleshooting — Universal Attendance System
 
+## Aplikasi tampil rusak / tombol tidak merespons di HP (dev server lokal)
+
+**Gejala:**
+- Di laptop `http://localhost:3000` normal.
+- Di HP (satu WiFi) `http://192.168.x.x:3000` halaman tampil tanpa styling,
+  form login tidak bisa disubmit, tombol tidak bereaksi.
+- Bisa juga muncul pesan di console browser: `Blocked cross-origin request to
+  Next.js dev resource ...` / `403 Unauthorized`.
+
+**Root cause:**
+Next.js 16 memblokir request lintas-origin ke aset dev (`/_next/*`, HMR, Server
+Action) secara default. Dev server hanya menganggap `localhost` (dan hostname
+saat dijalankan) sebagai same-origin. Saat HP membuka alamat LAN, semua chunk
+JS dan CSS dijawab `403 Unauthorized` — HTML tetap terkirim, tetapi CSS dan
+hidrasi React tidak pernah sampai, sehingga aplikasi terlihat "mati".
+Ini **hanya** terjadi pada `next dev`; build produksi tidak terpengaruh.
+
+**Perbaikan:**
+`next.config.ts` sekarang mendaftarkan host LAN/Tailscale di
+`allowedDevOrigins` (`192.168.*.*`, `10.*.*.*`, `172.*.*.*`, `100.*.*.*`,
+`*.local`, `*.ts.net`). Restart dev server setelah mengubahnya, lalu buka
+`http://<IP-laptop>:3000` dari HP.
+
+Cek IP laptop dengan `ipconfig` (atau lihat baris `Network:` saat `next dev`
+dijalankan).
+
+**Catatan penting untuk HP:**
+- Browser hanya mengizinkan **geolocation**, **kamera**, dan **service worker
+  (install PWA)** pada *secure context* (`https://` atau `localhost`). Alamat
+  `http://192.168.x.x` bukan secure context, jadi GPS akan ditolak dan PWA
+  tidak bisa di-install. Absensi tetap bisa dilakukan (validasi lokasi default
+  opsional), tetapi untuk menguji fitur lokasi/PWA gunakan URL HTTPS — misalnya
+  deployment Vercel atau tunnel HTTPS.
+- Kalau menjalankan `npm run build && npm start` lalu dibuka dari HP lewat
+  `http://IP-LAN:3000`, cookie sesi tidak lagi ditandai `Secure` untuk host
+  lokal/privat, sehingga login tidak berakhir di redirect loop.
+
+---
+
 ## ERR_TOO_MANY_REDIRECTS pada Mobile (Desktop OK)
 
 **Error message:**

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readSessionToken } from "@/lib/session";
 import { decryptSession } from "@/lib/session";
+import { isSecureCookies } from "@/lib/env";
 
 /**
  * Debug endpoint — diagnose session/cookie issues on mobile.
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
     // Environment info
     nodeEnv: process.env.NODE_ENV,
     vercelEnv: process.env.VERCEL_ENV,
-    isSecureCookiesEnabled: process.env.NODE_ENV === "production",
+    isSecureCookiesEnabled: isSecureCookies(),
   };
 
   return NextResponse.json(debugInfo);

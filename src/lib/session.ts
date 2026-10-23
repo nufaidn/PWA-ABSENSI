@@ -1,7 +1,7 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
-import { getAuthSecret, getSessionMaxAge, isSecureCookies } from "./env";
+import { getAuthSecret, getSessionMaxAge, isLocalOrPrivateHost, isSecureCookies } from "./env";
 
 /**
  * Stateless session handling.
@@ -58,12 +58,31 @@ export async function createSession(userId: string): Promise<void> {
   const token = await encryptSession({ sid, sub: userId });
 
   const cookieStore = await cookies();
-  
+  const requestHeaders = await headers();
+
+  /*
+   * Whether the cookie may carry `Secure` is a property of the connection, not
+   * of NODE_ENV. `npm start` on a laptop opened from a phone over
+   * `http://192.168.x.x:3000` is a production build served over plain HTTP:
+   * hard-coding `secure: true` there makes the browser throw the session cookie
+   * away, so sign-in appears to succeed and the next request redirects back to
+   * /login. Trust the proxy header when present, otherwise fall back to the
+   * configured default unless the host is clearly a loopback/private address.
+   */
+  const forwardedProto = requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim().toLowerCase();
+  const host = requestHeaders.get("host");
+  const secure =
+    forwardedProto === "https"
+      ? true
+      : forwardedProto === "http" || isLocalOrPrivateHost(host)
+        ? false
+        : isSecureCookies();
+
   // Mobile browsers sometimes have issues with sameSite=lax + secure.
   // We set both modes to maximize compatibility across desktop and mobile.
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: isSecureCookies(),
+    secure,
     // On mobile, sameSite='strict' can cause cookie loss. Use 'lax' for better
     // cross-device compatibility, with CSRF protection still active.
     sameSite: "lax",

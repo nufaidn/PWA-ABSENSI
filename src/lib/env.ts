@@ -67,6 +67,30 @@ export function isSecureCookies(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
+/**
+ * True for hosts that can only be reached over plain HTTP in practice:
+ * loopback and the private IPv4 ranges used by office Wi-Fi and Tailscale.
+ *
+ * A `Secure` cookie is discarded by the browser when it arrives over HTTP, so
+ * treating a LAN address as if it were HTTPS signs the user in on the server
+ * and then bounces them straight back to the login page on every request.
+ */
+export function isLocalOrPrivateHost(host: string | null | undefined): boolean {
+  const hostname = (host ?? "").trim().toLowerCase().replace(/^\[|\]$/g, "").split(":")[0];
+  if (!hostname) return false;
+  if (hostname === "localhost" || hostname === "::1") return true;
+
+  const octets = hostname.split(".");
+  if (octets.length !== 4 || octets.some((part) => !/^\d{1,3}$/.test(part))) return false;
+  const [a, b] = octets.map(Number);
+  if (a === 127) return true;
+  if (a === 10) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  if (a === 100 && b >= 64 && b <= 127) return true; // Tailscale / CGNAT
+  return false;
+}
+
 export function getSeedDefaultPassword(): string {
   return process.env.SEED_DEFAULT_PASSWORD ?? "Password123!";
 }
