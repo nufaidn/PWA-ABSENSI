@@ -13,7 +13,6 @@ import {
   MapPin,
   ScrollText,
   Settings,
-  ShieldCheck,
   UserCog,
   Users,
   X,
@@ -62,7 +61,6 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/schedules", label: "Jadwal Kerja", icon: ClipboardList, minRole: "ADMIN" },
   { href: "/admin/settings", label: "Pengaturan", icon: Settings, minRole: "SUPER_ADMIN" },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, minRole: "ADMIN" },
-  { href: "/pengaturan", label: "Izin Perangkat", icon: ShieldCheck },
 ];
 
 /**
