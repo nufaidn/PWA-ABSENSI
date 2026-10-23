@@ -1,16 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
-  ArrowUpRight,
   CalendarCheck2,
-  CalendarDays,
   CalendarX2,
-  ClipboardList,
   Clock,
-  FileClock,
-  LayoutDashboard,
-  Settings,
   UserCheck,
   Users,
 } from "lucide-react";
@@ -26,8 +19,7 @@ import {
   SurfaceTitle,
   Stat,
 } from "@/components/layout/primitives";
-import { StatusBadge, ProgressMeter, Monogram } from "@/components/layout/badges";
-import { AdminFact, AdminHeader } from "@/components/admin/admin-header";
+import { StatusBadge, ProgressMeter } from "@/components/layout/badges";
 import { AttendanceTrendChart } from "@/components/attendance/charts";
 import { LiveAttendanceIndicator } from "@/components/attendance/live-indicator";
 import { getAttendanceReport } from "@/lib/dal/reports";
@@ -49,57 +41,17 @@ export default async function AdminOverviewPage() {
 
   const { totals, recentActivity, summary, range } = overview;
 
-  const quickActions = [
-    {
-      href: "/admin/reports",
-      label: "Laporan",
-      hint: "Rekap harian & ekspor CSV",
-      icon: FileClock,
-    },
-    {
-      href: "/admin/employees",
-      label: "Karyawan",
-      hint: "Akun, role, dan penugasan",
-      icon: Users,
-    },
-    {
-      href: "/admin/schedules",
-      label: "Jadwal Kerja",
-      hint: "Shift, toleransi, hari kerja",
-      icon: ClipboardList,
-    },
-    ...(hasRole(user.role, "SUPER_ADMIN")
-      ? [
-          {
-            href: "/admin/settings",
-            label: "Pengaturan",
-            hint: "Organisasi & area geofence",
-            icon: Settings,
-          },
-        ]
-      : []),
-  ];
-
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-      <AdminHeader
-        icon={LayoutDashboard}
-        eyebrow="Ruang kerja admin"
-        title="Ringkasan Absensi"
-        description={`Kehadiran hari ini dan performa ${range.days} hari terakhir untuk ${policy.organizationName}.`}
-        meta={
-          <>
-            <AdminFact icon={CalendarDays} label="Periode" value={`${range.fromKey} – ${range.toKey}`} />
-            <AdminFact
-              icon={Users}
-              label="Karyawan aktif"
-              value={totals.activeEmployees}
-              tone="primary"
-            />
-            <LiveAttendanceIndicator enabled={hasRole(user.role, "ADMIN")} />
-          </>
-        }
-      />
+      <header className="mb-6 flex flex-col gap-1">
+        <h1 className="text-[22px] font-semibold tracking-tight text-foreground sm:text-[26px]">
+          Ringkasan Absensi
+        </h1>
+        <p className="text-[13.5px] text-muted-foreground">
+          Kehadiran hari ini dan performa {range.days} hari terakhir untuk {policy.organizationName}.
+        </p>
+        <LiveAttendanceIndicator enabled={hasRole(user.role, "ADMIN")} />
+      </header>
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat
@@ -130,39 +82,6 @@ export default async function AdminOverviewPage() {
           icon={Users}
         />
       </div>
-
-      <section aria-labelledby="aksi-cepat" className="mt-4 sm:mt-6">
-        <h2
-          id="aksi-cepat"
-          className="mb-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"
-        >
-          Aksi Cepat
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {quickActions.map((action) => (
-            <Link
-              key={action.href}
-              href={action.href}
-              className="group flex items-center gap-3 rounded-xl border border-border bg-card p-3.5 surface-elevated transition duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/40"
-            >
-              <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-primary transition-colors group-hover:bg-primary/15">
-                <action.icon className="size-4" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[13.5px] font-semibold text-foreground">
-                    {action.label}
-                  </span>
-                  <ArrowUpRight className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
-                </span>
-                <span className="mt-0.5 block truncate text-[12px] text-muted-foreground">
-                  {action.hint}
-                </span>
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
 
       <div className="mt-4 grid gap-4 sm:mt-6 sm:gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
         <Surface>
@@ -266,9 +185,11 @@ export default async function AdminOverviewPage() {
               return (
                 <li
                   key={record.id}
-                  className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-muted/40 sm:px-6"
+                  className="flex items-center gap-3 px-5 py-3.5 sm:px-6"
                 >
-                  <Monogram name={record.name} />
+                  <span className="grid size-9 shrink-0 place-items-center rounded-full bg-accent text-[11px] font-semibold text-primary">
+                    {record.name.slice(0, 2).toUpperCase()}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13.5px] font-medium text-foreground">
                       {record.name}

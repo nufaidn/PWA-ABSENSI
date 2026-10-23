@@ -355,10 +355,7 @@ export function LocationList({ locations }: { locations: LocationFormValues[] })
       ) : (
         <ul className="divide-y divide-border">
           {locations.map((location) => (
-            <li
-              key={location.id}
-              className="flex flex-wrap items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/40 sm:px-6"
-            >
+            <li key={location.id} className="flex flex-wrap items-center gap-3 px-5 py-4 sm:px-6">
               <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-accent text-primary">
                 <MapPin className="size-4" />
               </span>

@@ -450,10 +450,7 @@ export function ScheduleList({ schedules }: { schedules: ScheduleFormValues[] })
     <div className="flex flex-col">
       <ul className="divide-y divide-border">
         {schedules.map((schedule) => (
-          <li
-            key={schedule.id}
-            className="flex flex-wrap items-center gap-3 px-5 py-4 transition-colors hover:bg-muted/40 sm:px-6"
-          >
+          <li key={schedule.id} className="flex flex-wrap items-center gap-3 px-5 py-4 sm:px-6">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <p className="truncate text-[13.5px] font-medium text-foreground">
