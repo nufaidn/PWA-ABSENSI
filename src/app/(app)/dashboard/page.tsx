@@ -58,7 +58,7 @@ export default async function DashboardPage() {
           endTime: schedule.endTime,
           lateToleranceMinutes: schedule.lateToleranceMinutes,
           scheduleNote: schedule.description,
-          requireLocation: false,
+          requireLocation: today.requireLocation,
           isWorkingDay: today.isWorkingDay,
           timezone,
           serverNow: today.serverNow.toISOString(),

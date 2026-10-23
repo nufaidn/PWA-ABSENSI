@@ -12,6 +12,7 @@ import {
   MapPin,
   ScrollText,
   Settings,
+  ShieldCheck,
   UserCog,
   Users,
   X,
@@ -49,6 +50,7 @@ export const EMPLOYEE_NAV: NavItem[] = [
   { href: "/dashboard", label: "Beranda", icon: LayoutDashboard },
   { href: "/attendance", label: "Riwayat", icon: CalendarDays },
   { href: "/statistics", label: "Statistik", icon: ChartColumn },
+  { href: "/pengaturan", label: "Pengaturan", icon: Settings },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
@@ -58,6 +60,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/schedules", label: "Jadwal Kerja", icon: ClipboardList, minRole: "ADMIN" },
   { href: "/admin/settings", label: "Pengaturan", icon: Settings, minRole: "SUPER_ADMIN" },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, minRole: "ADMIN" },
+  { href: "/pengaturan", label: "Izin Perangkat", icon: ShieldCheck },
 ];
 
 /**
@@ -211,11 +214,12 @@ export function MobileNav({
   const livePathname = usePathname();
   const isAdmin = RANK[user.role] >= RANK.ADMIN;
 
-  // Four admin destinations fit comfortably in the bottom bar; settings and
-  // the audit log live behind the overflow menu.
+  // Four destinations fit comfortably in the bar for both roles, including the
+  // employee gear tab; the audit log (admin) is the only page that has to live
+  // behind the overflow menu, besides identity and sign-out.
   const primary: NavItem[] = isAdmin ? ADMIN_NAV.slice(0, 4) : EMPLOYEE_NAV;
 
-  const overflow: NavItem[] = isAdmin ? ADMIN_NAV.slice(4) : EMPLOYEE_NAV.slice(2);
+  const overflow: NavItem[] = isAdmin ? ADMIN_NAV.slice(4) : EMPLOYEE_NAV.slice(4);
 
   /**
    * Records which route the menu was opened on, not a plain boolean.

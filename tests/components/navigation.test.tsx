@@ -50,11 +50,12 @@ function renderNav(role: Role = "EMPLOYEE") {
 
 describe("bottom tab bar", () => {
   it("gives every tab an equal column", () => {
-    // The failure mode: a fixed five-column grid with three tabs, so each tab was
-    // 20% of the bar while 40% sat empty.
+    // The failure mode: a fixed five-column grid with a different tab count, so
+    // tabs were undersized while the rest of the bar sat empty. Both roles now
+    // carry four tabs — the employee's fourth being the gear/settings page.
     renderNav();
     const list = screen.getByRole("navigation", { name: "Navigasi utama" }).querySelector("ul");
-    expect(list?.style.gridTemplateColumns).toBe("repeat(3, minmax(0, 1fr))");
+    expect(list?.style.gridTemplateColumns).toBe("repeat(4, minmax(0, 1fr))");
   });
 
   it("matches the column count to an administrator's four tabs", () => {
@@ -75,7 +76,7 @@ describe("bottom tab bar", () => {
 
   it("shows every employee destination in the bar", () => {
     renderNav();
-    for (const label of ["Beranda", "Riwayat", "Statistik"]) {
+    for (const label of ["Beranda", "Riwayat", "Statistik", "Pengaturan"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
   });

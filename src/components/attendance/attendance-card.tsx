@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -376,7 +377,7 @@ function GeoNotice({
 
   if (geo.status === "denied" || geo.status === "unavailable") {
     return (
-      <p
+      <div
         className={cn(
           "flex items-start gap-2 rounded-lg px-3.5 py-2.5 text-[12.5px] leading-relaxed",
           requireLocation
@@ -387,9 +388,12 @@ function GeoNotice({
         <MapPinOff className="mt-0.5 size-3.5 shrink-0" />
         <span>
           {geo.message}
-          {requireLocation ? " Lokasi wajib diaktifkan untuk absen." : ""}
+          {requireLocation ? " Lokasi wajib diaktifkan untuk absen." : ""}{" "}
+          <Link href="/pengaturan" className="font-medium underline underline-offset-2">
+            Periksa izin lokasi
+          </Link>
         </span>
-      </p>
+      </div>
     );
   }
 

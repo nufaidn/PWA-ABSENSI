@@ -132,6 +132,8 @@ export interface TodaySummary {
   schedule: EffectiveSchedule;
   timezone: string;
   isWorkingDay: boolean;
+  /** Mirrors the org policy, so the notice can say whether GPS is mandatory. */
+  requireLocation: boolean;
 }
 
 export const getTodaySummary = cache(async (): Promise<TodaySummary> => {
@@ -165,6 +167,7 @@ export const getTodaySummary = cache(async (): Promise<TodaySummary> => {
     schedule: context.schedule,
     timezone: context.timezone,
     isWorkingDay: isWorkingDay(dateKey, context.workingDays),
+    requireLocation: context.requireLocation,
   };
 });
 
@@ -208,7 +211,7 @@ export async function checkIn(input: {
   if (context.requireLocation) {
     if (locationOutcome.kind === "NO_LOCATION" && locationOutcome.reason === "MISSING_COORDINATES") {
       throw new AttendanceError(
-        "Validasi lokasi aktif. Izinkan akses lokasi pada perangkat Anda lalu coba lagi.",
+        "Validasi lokasi aktif. Izinkan akses lokasi pada perangkat Anda — buka tab Pengaturan → periksa izin lokasi — lalu coba lagi.",
         "LOCATION_REQUIRED",
       );
     }

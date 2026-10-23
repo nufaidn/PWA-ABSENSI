@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Mail, Phone } from "lucide-react";
+import Link from "next/link";
+import { ChevronRight, Mail, Phone, ShieldCheck } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getEffectiveSchedule } from "@/lib/dal/settings";
 import { ROLE_LABEL } from "@/lib/attendance/time";
@@ -111,6 +112,27 @@ export default async function ProfilePage() {
             </SurfaceDescription>
           </SurfaceHeader>
           <ChangePasswordForm />
+        </Surface>
+
+        <Surface className="overflow-hidden">
+          <SurfaceHeader>
+            <SurfaceTitle>Perangkat</SurfaceTitle>
+            <SurfaceDescription className="mt-1">
+              Periksa izin lokasi dan status pemasangan aplikasi pada perangkat ini.
+            </SurfaceDescription>
+          </SurfaceHeader>
+          <div className="px-5 py-5 sm:px-6">
+            <Link
+              href="/pengaturan"
+              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-4 py-3 text-[13.5px] font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <span className="flex items-center gap-2.5">
+                <ShieldCheck className="size-4 text-primary" />
+                Izin &amp; status perangkat
+              </span>
+              <ChevronRight className="size-4 text-muted-foreground" />
+            </Link>
+          </div>
         </Surface>
       </div>
     </div>
