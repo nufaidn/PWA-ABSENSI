@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   CalendarDays,
   ChartColumn,
+  CircleUserRound,
   ClipboardList,
   FileClock,
   LayoutDashboard,
@@ -51,6 +52,7 @@ export const EMPLOYEE_NAV: NavItem[] = [
   { href: "/attendance", label: "Riwayat", icon: CalendarDays },
   { href: "/statistics", label: "Statistik", icon: ChartColumn },
   { href: "/pengaturan", label: "Pengaturan", icon: Settings },
+  { href: "/profile", label: "Profil", icon: CircleUserRound },
 ];
 
 export const ADMIN_NAV: NavItem[] = [
@@ -214,12 +216,13 @@ export function MobileNav({
   const livePathname = usePathname();
   const isAdmin = RANK[user.role] >= RANK.ADMIN;
 
-  // Four destinations fit comfortably in the bar for both roles, including the
-  // employee gear tab; the audit log (admin) is the only page that has to live
-  // behind the overflow menu, besides identity and sign-out.
+  // Five destinations fit comfortably in the employee bar — home, history,
+  // statistics, the gear tab and, as its own entry point, the profile tab the
+  // gear page deliberately does not duplicate. Admins keep four admin pages and
+  // reach the audit log and device permissions behind the overflow menu.
   const primary: NavItem[] = isAdmin ? ADMIN_NAV.slice(0, 4) : EMPLOYEE_NAV;
 
-  const overflow: NavItem[] = isAdmin ? ADMIN_NAV.slice(4) : EMPLOYEE_NAV.slice(4);
+  const overflow: NavItem[] = isAdmin ? ADMIN_NAV.slice(4) : EMPLOYEE_NAV.slice(5);
 
   /**
    * Records which route the menu was opened on, not a plain boolean.

@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { ChevronRight, UserCog } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getLocationPolicy } from "@/lib/dal/settings";
 import {
@@ -19,8 +17,8 @@ export const metadata: Metadata = {
  * app, so the page only reads live state and explains how to change it on the
  * device in hand. Both cards re-read their signal when the tab becomes visible
  * again, which is exactly the moment someone returns from the phone's
- * settings. Account management stays on `/profile`; this screen links there so
- * the gear tab can safely be the only "settings" mobile users ever need.
+ * settings. Account management has its own "Profil" tab in the navigation, so
+ * this screen stays purely about the device.
  */
 export default async function PengaturanPage() {
   await requireUser();
@@ -42,20 +40,8 @@ export default async function PengaturanPage() {
         <LocationPermissionCard />
 
         <PwaStatusCard />
-
-        <div className="flex flex-col gap-3">
-          <Link
-            href="/profile"
-            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3 text-[13.5px] font-medium text-foreground transition-colors hover:bg-muted"
-          >
-            <span className="flex items-center gap-2.5">
-              <UserCog className="size-4 text-primary" />
-              Profil &amp; keamanan akun
-            </span>
-            <ChevronRight className="size-4 text-muted-foreground" />
-          </Link>
-        </div>
       </div>
     </div>
   );
 }
+
