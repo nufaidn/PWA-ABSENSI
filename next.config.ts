@@ -30,6 +30,12 @@ const nextConfig: NextConfig = {
    */
   cacheComponents: false,
 
+  // Pin the security upgrade policy so the Next.js CLI keeps this app on
+  // security-only updates instead of prompting for experimental defaults.
+  experimental: {
+    agentUpgrade: "security",
+  },
+
   // Firebase Admin uses Node-only transports (gRPC/HTTP2); keep it out of the
   // bundler so Next.js does not try to trace or bundle its native dependencies.
   serverExternalPackages: ["firebase-admin"],
