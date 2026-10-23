@@ -1,6 +1,24 @@
 import type { Metadata } from "next";
+import type { ComponentType } from "react";
 import { redirect } from "next/navigation";
-import { ScrollText, X } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarPlus,
+  CalendarX2,
+  Clock,
+  KeyRound,
+  MapPin,
+  MapPinOff,
+  Pencil,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  Trash2,
+  UserCheck,
+  UserPlus,
+  UserX,
+  X,
+} from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { AUDIT_ACTION_LABEL, getAuditLog } from "@/lib/dal/audit";
 import { getLocationPolicy } from "@/lib/dal/settings";
@@ -13,11 +31,64 @@ import {
   SurfaceTitle,
   EmptyState,
 } from "@/components/layout/primitives";
-import { Chip, Monogram } from "@/components/layout/badges";
+import { AdminFact, AdminHeader } from "@/components/admin/admin-header";
 import { Pagination } from "@/components/attendance/pagination";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Audit Log",
+};
+
+/**
+ * Visual identity per audit action.
+ *
+ * A flat chip told the operator *what* changed but not what kind of event it
+ * was; scanning twenty rows meant reading every label. The icon and the tint
+ * group the trail at a glance — creation green, edits blue, deletion red,
+ * access changes amber — while the label still carries the meaning.
+ */
+const ACTION_TONE = {
+  create: {
+    tile: "bg-success-muted text-[oklch(0.34_0.08_163)] ring-success/25",
+    badge: "bg-success-muted/70 text-[oklch(0.34_0.08_163)] ring-success/25",
+  },
+  update: {
+    tile: "bg-accent text-primary ring-primary/15",
+    badge: "bg-primary/8 text-primary ring-primary/20",
+  },
+  remove: {
+    tile: "bg-destructive/10 text-destructive ring-destructive/20",
+    badge: "bg-destructive/8 text-destructive ring-destructive/20",
+  },
+  access: {
+    tile: "bg-warning-muted text-[oklch(0.42_0.11_76)] ring-warning/30",
+    badge: "bg-warning-muted/70 text-[oklch(0.42_0.11_76)] ring-warning/30",
+  },
+  info: {
+    tile: "bg-info-muted text-[oklch(0.34_0.09_234)] ring-info/25",
+    badge: "bg-info-muted/70 text-[oklch(0.34_0.09_234)] ring-info/25",
+  },
+} as const;
+
+const ACTION_META: Record<
+  AuditAction,
+  { icon: ComponentType<{ className?: string }>; tone: keyof typeof ACTION_TONE }
+> = {
+  EMPLOYEE_CREATED: { icon: UserPlus, tone: "create" },
+  EMPLOYEE_UPDATED: { icon: Pencil, tone: "update" },
+  EMPLOYEE_DEACTIVATED: { icon: UserX, tone: "access" },
+  EMPLOYEE_REACTIVATED: { icon: UserCheck, tone: "create" },
+  EMPLOYEE_DELETED: { icon: Trash2, tone: "remove" },
+  EMPLOYEE_ROLE_CHANGED: { icon: ShieldCheck, tone: "update" },
+  EMPLOYEE_PASSWORD_RESET: { icon: KeyRound, tone: "access" },
+  SCHEDULE_CREATED: { icon: CalendarPlus, tone: "create" },
+  SCHEDULE_UPDATED: { icon: CalendarClock, tone: "update" },
+  SCHEDULE_DELETED: { icon: CalendarX2, tone: "remove" },
+  ATTENDANCE_ADJUSTED: { icon: Clock, tone: "info" },
+  SETTINGS_UPDATED: { icon: Settings, tone: "update" },
+  LOCATION_CREATED: { icon: MapPin, tone: "create" },
+  LOCATION_UPDATED: { icon: MapPin, tone: "update" },
+  LOCATION_DELETED: { icon: MapPinOff, tone: "remove" },
 };
 
 function readParam(value: string | string[] | undefined): string | undefined {
@@ -66,15 +137,34 @@ export default async function AuditLogPage({
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-6 flex flex-col gap-1">
-        <h1 className="text-[22px] font-semibold tracking-tight text-foreground sm:text-[26px]">
-          Audit Log
-        </h1>
-        <p className="text-[13.5px] text-muted-foreground">
-          Jejak aktivitas administratif, append-only. Catatan tidak dapat diubah atau dihapus dari
-          antarmuka.
-        </p>
-      </header>
+      <AdminHeader
+        icon={ScrollText}
+        eyebrow="Keamanan"
+        title="Audit Log"
+        description="Jejak aktivitas administratif, append-only. Catatan tidak dapat diubah atau dihapus dari antarmuka."
+        meta={
+          <>
+            <AdminFact icon={ScrollText} label="Total" value={log.total} tone="primary" />
+            <AdminFact
+              icon={ShieldCheck}
+              label="Filter"
+              value={
+                action === "ALL" && !search
+                  ? "Semua aktivitas"
+                  : [action === "ALL" ? null : AUDIT_ACTION_LABEL[action], search ? `“${search}”` : null]
+                      .filter(Boolean)
+                      .join(" · ")
+              }
+              tone={hasFilters ? "warning" : "neutral"}
+            />
+            <AdminFact
+              icon={Clock}
+              label="Zona waktu"
+              value={policy.timezone}
+            />
+          </>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3.5 surface-elevated">
         <form className="flex flex-wrap items-center gap-2" method="get" action="/admin/audit-log">
@@ -137,34 +227,54 @@ export default async function AuditLogPage({
           />
         ) : (
           <ul className="divide-y divide-border">
-            {log.rows.map((entry) => (
-              <li key={entry.id} className="flex items-start gap-3 px-5 py-4 sm:px-6">
-                {entry.actor ? (
-                  <Monogram name={entry.actor.name} size="sm" />
-                ) : (
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-muted text-[11px] font-semibold text-muted-foreground">
-                    SYS
-                  </span>
-                )}
+            {log.rows.map((entry) => {
+              const meta = ACTION_META[entry.action] ?? { icon: ScrollText, tone: "info" as const };
+              const tone = ACTION_TONE[meta.tone];
+              const Icon = meta.icon;
 
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <Chip>{AUDIT_ACTION_LABEL[entry.action] ?? entry.action}</Chip>
-                    <span className="text-[11.5px] text-muted-foreground">
-                      {entry.entityType}
-                    </span>
+              return (
+                <li
+                  key={entry.id}
+                  className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-muted/40 sm:px-6"
+                >
+                  <span
+                    className={cn(
+                      "mt-0.5 grid size-9 shrink-0 place-items-center rounded-xl ring-1 ring-inset",
+                      tone.tile,
+                    )}
+                    aria-hidden
+                  >
+                    <Icon className="size-4" />
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+                          tone.badge,
+                        )}
+                      >
+                        {AUDIT_ACTION_LABEL[entry.action] ?? entry.action}
+                      </span>
+                      <span className="text-[11.5px] text-muted-foreground">
+                        {entry.entityType}
+                      </span>
+                    </div>
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-foreground">
+                      {entry.summary}
+                    </p>
+                    <p className="tabular mt-1 text-[11.5px] text-muted-foreground">
+                      <span className="font-medium text-foreground/70">
+                        {entry.actor?.name ?? "Sistem"}
+                      </span>
+                      {entry.ipAddress ? ` · ${entry.ipAddress}` : ""} ·{" "}
+                      {formatTimestamp(entry.createdAt, policy.timezone)}
+                    </p>
                   </div>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-foreground">
-                    {entry.summary}
-                  </p>
-                  <p className="tabular mt-1 text-[11.5px] text-muted-foreground">
-                    {entry.actor?.name ?? "Sistem"}
-                    {entry.ipAddress ? ` · ${entry.ipAddress}` : ""} ·{" "}
-                    {formatTimestamp(entry.createdAt, policy.timezone)}
-                  </p>
-                </div>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
 

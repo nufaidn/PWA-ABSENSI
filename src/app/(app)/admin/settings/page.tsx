@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Building2, Globe2, MapPin, ShieldAlert, ShieldCheck, Settings } from "lucide-react";
 import { requireRole } from "@/lib/dal/auth";
 import { getAllFences, getAllSchedules, getSettings } from "@/lib/dal/settings";
 import {
@@ -7,6 +8,7 @@ import {
   SurfaceHeader,
   SurfaceTitle,
 } from "@/components/layout/primitives";
+import { AdminFact, AdminHeader } from "@/components/admin/admin-header";
 import { SettingsForm } from "@/components/admin/settings-form";
 import { LocationList } from "@/components/admin/location-manager";
 
@@ -28,19 +30,40 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-6 flex flex-col gap-1">
-        <h1 className="text-[22px] font-semibold tracking-tight text-foreground sm:text-[26px]">
-          Pengaturan Sistem
-        </h1>
-        <p className="text-[13.5px] text-muted-foreground">
-          Konfigurasi organisasi, zona waktu, dan validasi lokasi absensi.
-        </p>
-      </header>
+      <AdminHeader
+        icon={Settings}
+        eyebrow="Super admin"
+        title="Pengaturan Sistem"
+        description="Konfigurasi organisasi, zona waktu, dan validasi lokasi absensi. Perubahan berlaku untuk seluruh karyawan."
+        meta={
+          <>
+            <AdminFact icon={Building2} label="Organisasi" value={settings.organizationName} />
+            <AdminFact icon={Globe2} label="Zona waktu" value={settings.timezone} />
+            <AdminFact
+              icon={settings.requireLocationValidation ? ShieldCheck : ShieldAlert}
+              label="Validasi lokasi"
+              value={settings.requireLocationValidation ? "Wajib" : "Opsional"}
+              tone={settings.requireLocationValidation ? "success" : "warning"}
+            />
+            <AdminFact
+              icon={MapPin}
+              label="Geofence aktif"
+              value={activeFenceCount}
+              tone={activeFenceCount > 0 ? "primary" : "neutral"}
+            />
+          </>
+        }
+      />
 
       <div className="flex flex-col gap-4 sm:gap-6">
         <Surface className="overflow-hidden">
           <SurfaceHeader>
-            <SurfaceTitle>Konfigurasi Umum</SurfaceTitle>
+            <SurfaceTitle className="flex items-center gap-2">
+              <span className="grid size-7 place-items-center rounded-lg bg-accent text-primary">
+                <Building2 className="size-3.5" />
+              </span>
+              Konfigurasi Umum
+            </SurfaceTitle>
             <SurfaceDescription className="mt-1">
               Berlaku untuk seluruh karyawan dan tidak dapat diubah oleh admin biasa.
             </SurfaceDescription>
@@ -62,7 +85,12 @@ export default async function SettingsPage() {
 
         <Surface className="overflow-hidden">
           <SurfaceHeader>
-            <SurfaceTitle>Lokasi Absensi</SurfaceTitle>
+            <SurfaceTitle className="flex items-center gap-2">
+              <span className="grid size-7 place-items-center rounded-lg bg-accent text-primary">
+                <MapPin className="size-3.5" />
+              </span>
+              Lokasi Absensi
+            </SurfaceTitle>
             <SurfaceDescription className="mt-1">
               Area geofence yang dipakai untuk memvalidasi check-in. Bila validasi lokasi tidak
               diwajibkan, lokasi tetap dicatat untuk keperluan audit.

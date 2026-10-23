@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { ShieldCheck, UserCheck, Users, UserX } from "lucide-react";
 import { requireRole } from "@/lib/dal/auth";
 import { getEmployees } from "@/lib/dal/employees";
 import { getActiveSchedules } from "@/lib/dal/settings";
@@ -11,6 +12,7 @@ import {
   SurfaceHeader,
   SurfaceTitle,
 } from "@/components/layout/primitives";
+import { AdminFact, AdminHeader } from "@/components/admin/admin-header";
 import { EmployeeRoster } from "@/components/admin/employee-roster";
 
 export const metadata: Metadata = {
@@ -46,17 +48,30 @@ export default async function EmployeesPage({
 
   if (!hasRole(user.role, "ADMIN")) redirect("/admin/overview");
 
+  const activeCount = employees.filter((employee) => employee.isActive).length;
+  const adminCount = employees.filter((employee) => employee.role !== "EMPLOYEE").length;
+
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-6 flex flex-col gap-1">
-        <h1 className="text-[22px] font-semibold tracking-tight text-foreground sm:text-[26px]">
-          Kelola Karyawan
-        </h1>
-        <p className="text-[13.5px] text-muted-foreground">
-          {employees.length} karyawan terdaftar. Menonaktifkan akun langsung mengejar sesi yang
-          sedang berjalan.
-        </p>
-      </header>
+      <AdminHeader
+        icon={Users}
+        eyebrow="Manajemen"
+        title="Kelola Karyawan"
+        description="Menonaktifkan akun langsung mengejar sesi yang sedang berjalan tanpa menghapus riwayat absensinya."
+        meta={
+          <>
+            <AdminFact icon={Users} label="Sesuai filter" value={employees.length} tone="primary" />
+            <AdminFact icon={UserCheck} label="Aktif" value={activeCount} tone="success" />
+            <AdminFact
+              icon={UserX}
+              label="Nonaktif"
+              value={employees.length - activeCount}
+              tone={employees.length - activeCount > 0 ? "warning" : "neutral"}
+            />
+            <AdminFact icon={ShieldCheck} label="Admin" value={adminCount} />
+          </>
+        }
+      />
 
       <Surface className="overflow-hidden">
         <SurfaceHeader>

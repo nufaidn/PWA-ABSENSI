@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { FileClock, MapPin } from "lucide-react";
+import { CalendarDays, CalendarX2, Clock, FileClock, MapPin, Timer, UserCheck } from "lucide-react";
 import { requireRole } from "@/lib/dal/auth";
 import { getAttendanceReport, getDepartments } from "@/lib/dal/reports";
 import { AttendanceStatus } from "@/lib/domain";
@@ -18,7 +18,8 @@ import {
   EmptyState,
   Stat,
 } from "@/components/layout/primitives";
-import { StatusBadge, ProgressMeter } from "@/components/layout/badges";
+import { StatusBadge, ProgressMeter, Monogram } from "@/components/layout/badges";
+import { AdminFact, AdminHeader } from "@/components/admin/admin-header";
 import { LiveAttendanceIndicator } from "@/components/attendance/live-indicator";
 
 export const metadata: Metadata = {
@@ -69,31 +70,57 @@ export default async function ReportsPage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
-      <header className="mb-6 flex flex-col gap-1">
-        <h1 className="text-[22px] font-semibold tracking-tight text-foreground sm:text-[26px]">
-          Laporan Absensi
-        </h1>
-        <p className="text-[13.5px] text-muted-foreground">
-          {report.range.fromKey} sampai {report.range.toKey} · {report.range.days} hari ·{" "}
-          {report.total} catatan
-          {department ? ` · departemen ${department}` : ""}
-        </p>
-        <LiveAttendanceIndicator enabled />
-      </header>
+      <AdminHeader
+        icon={FileClock}
+        eyebrow="Laporan"
+        title="Laporan Absensi"
+        description={`${report.range.fromKey} sampai ${report.range.toKey} · ${report.range.days} hari · ${report.total} catatan${department ? ` · departemen ${department}` : ""}`}
+        meta={
+          <>
+            <AdminFact
+              icon={CalendarDays}
+              label="Rentang"
+              value={`${report.range.fromKey} – ${report.range.toKey}`}
+            />
+            <AdminFact icon={FileClock} label="Catatan" value={report.total} tone="primary" />
+            <AdminFact
+              icon={UserCheck}
+              label="Kehadiran"
+              value={`${report.summary.attendanceRate}%`}
+              tone="success"
+            />
+            <LiveAttendanceIndicator enabled />
+          </>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <Stat
           label="Hadir"
           value={report.summary.present}
           hint="tepat waktu"
+          icon={UserCheck}
           tone="success"
         />
-        <Stat label="Terlambat" value={report.summary.late} hint="perPage terlambat" tone="warning" />
-        <Stat label="Alpa" value={report.summary.absent} hint="tidak tercatat" tone="danger" />
+        <Stat
+          label="Terlambat"
+          value={report.summary.late}
+          hint="melewati toleransi"
+          icon={Clock}
+          tone={report.summary.late > 0 ? "warning" : "neutral"}
+        />
+        <Stat
+          label="Alpa"
+          value={report.summary.absent}
+          hint="tidak tercatat"
+          icon={CalendarX2}
+          tone={report.summary.absent > 0 ? "danger" : "neutral"}
+        />
         <Stat
           label="Rata-rata Durasi"
           value={formatDuration(report.averageWorkedMinutes)}
           hint="per hari hadir"
+          icon={Timer}
         />
       </div>
 
@@ -188,7 +215,7 @@ export default async function ReportsPage({
                 <table className="w-full min-w-[820px] text-left text-[13px]">
                   <caption className="sr-only">Detail absensi seluruh karyawan</caption>
                   <thead>
-                    <tr className="border-b border-border text-[11.5px] uppercase tracking-wide text-muted-foreground">
+                    <tr className="border-b border-border bg-muted/40 text-[11.5px] uppercase tracking-wide text-muted-foreground">
                       <th scope="col" className="px-6 py-3 font-medium">Karyawan</th>
                       <th scope="col" className="px-4 py-3 font-medium">Tanggal</th>
                       <th scope="col" className="px-4 py-3 font-medium">Status</th>
@@ -202,12 +229,19 @@ export default async function ReportsPage({
                     {report.rows.map((row) => {
                       const descriptor = STATUS_DESCRIPTOR[row.status];
                       return (
-                        <tr key={row.id}>
+                        <tr key={row.id} className="transition-colors hover:bg-muted/40">
                           <td className="px-6 py-3.5">
-                            <span className="font-medium text-foreground">{row.userName}</span>
-                            <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
-                              {row.employeeCode ?? "—"} · {row.department ?? "Tanpa departemen"}
-                            </span>
+                            <div className="flex items-center gap-2.5">
+                              <Monogram name={row.userName} size="sm" />
+                              <div className="min-w-0">
+                                <span className="block font-medium text-foreground">
+                                  {row.userName}
+                                </span>
+                                <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                                  {row.employeeCode ?? "—"} · {row.department ?? "Tanpa departemen"}
+                                </span>
+                              </div>
+                            </div>
                           </td>
                           <td className="tabular px-4 py-3.5 whitespace-nowrap">{row.dateLabel}</td>
                           <td className="px-4 py-3.5">
