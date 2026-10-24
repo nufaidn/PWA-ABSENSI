@@ -26,7 +26,6 @@ describe("codePrefixForRole", () => {
     // Admins sign in with an email address; issuing a code would imply it is
     // an identifier when it is not.
     expect(codePrefixForRole("ADMIN")).toBeNull();
-    expect(codePrefixForRole("SUPER_ADMIN")).toBeNull();
   });
 });
 

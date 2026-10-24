@@ -10,10 +10,23 @@ export const Role = {
   EMPLOYEE: "EMPLOYEE",
   INTERN: "INTERN",
   ADMIN: "ADMIN",
-  SUPER_ADMIN: "SUPER_ADMIN",
 } as const;
 
 export type Role = (typeof Role)[keyof typeof Role];
+
+/**
+ * The three leave categories an employee or intern can submit.
+ *
+ * All three are recorded as `AttendanceStatus.LEAVE`; the type only exists so
+ * the reason and the doctor's note requirement can be attached to the request.
+ */
+export const LeaveType = {
+  CUTI: "CUTI",
+  IZIN: "IZIN",
+  SAKIT: "SAKIT",
+} as const;
+
+export type LeaveType = (typeof LeaveType)[keyof typeof LeaveType];
 
 export const AttendanceStatus = {
   PRESENT: "PRESENT",
@@ -42,12 +55,17 @@ export const AuditAction = {
   LOCATION_CREATED: "LOCATION_CREATED",
   LOCATION_UPDATED: "LOCATION_UPDATED",
   LOCATION_DELETED: "LOCATION_DELETED",
+  LEAVE_REQUESTED: "LEAVE_REQUESTED",
 } as const;
 
 export type AuditAction = (typeof AuditAction)[keyof typeof AuditAction];
 
 export function isRole(value: unknown): value is Role {
   return typeof value === "string" && Object.values(Role).includes(value as Role);
+}
+
+export function isLeaveType(value: unknown): value is LeaveType {
+  return typeof value === "string" && Object.values(LeaveType).includes(value as LeaveType);
 }
 
 export function isAttendanceStatus(value: unknown): value is AttendanceStatus {
@@ -165,6 +183,31 @@ export interface Setting {
   defaultScheduleId: string | null;
   requireLocationValidation: boolean;
   updatedAt: Date;
+}
+
+/**
+ * A submitted cuti/izin/sakit request.
+ *
+ * There is no approval step: the request is the record, and the same write
+ * marks every working day in the range as `LEAVE` so reports and the daily
+ * dashboard agree immediately. The employee fields are snapshots taken when the
+ * request was made; the user document remains the source of truth for the
+ * current name and department.
+ */
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  employeeCode: string | null;
+  department: string | null;
+  type: LeaveType;
+  /** Inclusive `YYYY-MM-DD` bounds. */
+  startDate: string;
+  endDate: string;
+  reason: string | null;
+  doctorNoteUrl: string | null;
+  doctorNotePublicId: string | null;
+  createdAt: Date;
 }
 
 export interface AuditLog {

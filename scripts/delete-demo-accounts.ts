@@ -9,7 +9,7 @@ import { firestore } from "../src/lib/firebase-config";
  * so this deletes them all, including their attendance rows and uniqueness
  * documents.
  *
- * Run `npm run bootstrap:admin` afterwards to create a single real SUPER_ADMIN.
+ * Run `npm run bootstrap:admin` afterwards to create a single real ADMIN.
  * Safe to re-run: it is idempotent.
  *
  *   npm run db:purge-demo            (dry run)

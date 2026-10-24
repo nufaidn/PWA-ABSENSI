@@ -171,4 +171,5 @@ export const AUDIT_ACTION_LABEL: Record<AuditAction, string> = {
   LOCATION_CREATED: "Lokasi dibuat",
   LOCATION_UPDATED: "Lokasi diperbarui",
   LOCATION_DELETED: "Lokasi dihapus",
+  LEAVE_REQUESTED: "Cuti/izin/sakit diajukan",
 };

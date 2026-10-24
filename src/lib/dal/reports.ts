@@ -9,7 +9,7 @@ import {
   toAttendance,
   toUser,
 } from "@/lib/db";
-import { assertRole, assertUser, ForbiddenError } from "./auth";
+import { assertRole, assertUser, ForbiddenError, NotFoundError } from "./auth";
 import { getLocationPolicy } from "./settings";
 import {
   accumulateStatus,
@@ -344,14 +344,29 @@ function toReportRow(record: Attendance, user: User, timezone: string): ReportRo
 }
 
 /**
- * Full result set for CSV export.
+ * Full attendance history for one employee, used by the PDF export.
  *
- * Deliberately unpaginated but bounded by `MAX_REPORT_RANGE_DAYS`, so a wide
- * filter cannot attempt to serialise an unbounded result set into memory.
+ * Bounded by `MAX_REPORT_RANGE_DAYS`, so a hand-crafted URL cannot ask the
+ * server to serialise years of records into memory.
  */
-export async function getReportForExport(
-  filters: ReportFilters,
-): Promise<{ rows: ReportRow[]; range: ResolvedReportRange }> {
+export interface EmployeeReport {
+  employee: {
+    id: string;
+    name: string;
+    email: string;
+    employeeCode: string | null;
+    department: string | null;
+  };
+  rows: ReportRow[];
+  range: ResolvedReportRange;
+  summary: AttendanceSummary;
+  averageWorkedMinutes: number;
+}
+
+export async function getEmployeeReport(
+  userId: string,
+  filters: Pick<ReportFilters, "from" | "to">,
+): Promise<EmployeeReport> {
   await assertRole("ADMIN");
   const policy = await getLocationPolicy();
   const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: policy.timezone }).format(new Date());
@@ -362,25 +377,29 @@ export async function getReportForExport(
     readUsers(),
   ]);
 
-  const filtered = records.filter((record) => {
-    const user = users.get(record.userId);
-    if (!user || !matchesUserFilters(user, filters)) return false;
-    if (filters.userId && record.userId !== filters.userId) return false;
-    if (filters.status && filters.status !== "ALL" && record.status !== filters.status) {
-      return false;
-    }
-    return true;
-  });
+  const user = users.get(userId);
+  if (!user || !isAttendanceRole(user.role)) {
+    throw new NotFoundError("Karyawan tidak ditemukan.");
+  }
 
-  filtered.sort((a, b) => {
-    const byDate = a.workDate.localeCompare(b.workDate);
-    if (byDate !== 0) return byDate;
-    return (users.get(a.userId)?.name ?? "").localeCompare(users.get(b.userId)?.name ?? "", "id");
-  });
+  const own = records.filter((record) => record.userId === user.id);
+  own.sort((a, b) => a.workDate.localeCompare(b.workDate));
+
+  const workedMinutes = sumWorked(own);
+  const summary = summarizeStatuses(statusGroups(own), workedMinutes);
 
   return {
-    rows: filtered.map((record) => toReportRow(record, users.get(record.userId)!, policy.timezone)),
+    employee: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      employeeCode: user.employeeCode,
+      department: user.department,
+    },
+    rows: own.map((record) => toReportRow(record, user, policy.timezone)),
     range,
+    summary,
+    averageWorkedMinutes: averageWorkedMinutes(workedMinutes, summary),
   };
 }
 

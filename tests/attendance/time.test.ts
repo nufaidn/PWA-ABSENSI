@@ -160,10 +160,8 @@ describe("formatting", () => {
 
 describe("role hierarchy", () => {
   it("grants a role every privilege of the ranks below it", () => {
-    expect(hasRole("SUPER_ADMIN", "ADMIN")).toBe(true);
     expect(hasRole("ADMIN", "EMPLOYEE")).toBe(true);
     expect(hasRole("EMPLOYEE", "ADMIN")).toBe(false);
-    expect(hasRole("ADMIN", "SUPER_ADMIN")).toBe(false);
   });
 
   it("treats a role as satisfying its own requirement", () => {
@@ -172,7 +170,6 @@ describe("role hierarchy", () => {
 
   it("keeps an intern out of the admin area", () => {
     expect(hasRole("INTERN", "ADMIN")).toBe(false);
-    expect(hasRole("INTERN", "SUPER_ADMIN")).toBe(false);
   });
 
   it("ranks an intern alongside an employee, not below it", () => {
@@ -187,13 +184,10 @@ describe("role hierarchy", () => {
     expect(isSelfServiceRole("EMPLOYEE")).toBe(true);
     expect(isSelfServiceRole("INTERN")).toBe(true);
     expect(isSelfServiceRole("ADMIN")).toBe(false);
-    expect(isSelfServiceRole("SUPER_ADMIN")).toBe(false);
   });
 
   it("gives every role a display label", () => {
     expect(ROLE_LABEL.INTERN).toBe("Magang");
-    expect(Object.keys(ROLE_LABEL).sort()).toEqual(
-      ["ADMIN", "EMPLOYEE", "INTERN", "SUPER_ADMIN"].sort(),
-    );
+    expect(Object.keys(ROLE_LABEL).sort()).toEqual(["ADMIN", "EMPLOYEE", "INTERN"].sort());
   });
 });

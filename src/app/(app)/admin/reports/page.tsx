@@ -1,24 +1,27 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
-import { FileClock, MapPin } from "lucide-react";
+import { Download, Eye, FileClock } from "lucide-react";
 import { requireRole } from "@/lib/dal/auth";
 import { getAttendanceReport, getDepartments } from "@/lib/dal/reports";
 import { AttendanceStatus } from "@/lib/domain";
 import { STATUS_DESCRIPTOR, formatDuration } from "@/lib/attendance/time";
+import {
+  employeeReportApiHref,
+  employeeReportDetailHref,
+} from "@/lib/report-links";
 import { AttendanceFilters } from "@/components/attendance/attendance-filters";
 import { Pagination } from "@/components/attendance/pagination";
-import { ExportCsvButton, ExportHint } from "@/components/admin/export-csv-button";
 import { DepartmentSelect } from "@/components/admin/department-select";
 import {
   Surface,
-  SurfaceBody,
   SurfaceDescription,
   SurfaceHeader,
   SurfaceTitle,
   EmptyState,
   Stat,
 } from "@/components/layout/primitives";
-import { StatusBadge, ProgressMeter } from "@/components/layout/badges";
+import { StatusBadge } from "@/components/layout/badges";
 import { LiveAttendanceIndicator } from "@/components/attendance/live-indicator";
 
 export const metadata: Metadata = {
@@ -39,6 +42,44 @@ function readStatus(value: string | string[] | undefined): AttendanceStatus | "A
   const raw = readParam(value) ?? "ALL";
   const allowed = Object.values(AttendanceStatus) as string[];
   return allowed.includes(raw) ? (raw as AttendanceStatus) : "ALL";
+}
+
+const ACTION_LINK_CLASS =
+  "inline-grid size-8 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/40 focus-visible:outline-none";
+
+/** View-detail and download actions for one employee. */
+function ReportActions({
+  userId,
+  name,
+  fromKey,
+  toKey,
+}: {
+  userId: string;
+  name: string;
+  fromKey: string;
+  toKey: string;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Link
+        href={employeeReportDetailHref(userId, fromKey, toKey)}
+        aria-label={`Lihat detail absensi ${name}`}
+        title={`Lihat detail absensi ${name}`}
+        className={ACTION_LINK_CLASS}
+      >
+        <Eye className="size-4" aria-hidden />
+      </Link>
+      <a
+        href={employeeReportApiHref(userId, fromKey, toKey)}
+        download
+        aria-label={`Unduh laporan PDF ${name}`}
+        title={`Unduh laporan PDF ${name}`}
+        className={ACTION_LINK_CLASS}
+      >
+        <Download className="size-4" aria-hidden />
+      </a>
+    </div>
+  );
 }
 
 /**
@@ -63,7 +104,7 @@ export default async function ReportsPage({
   const page = readPage(params.page);
 
   const [report, departments] = await Promise.all([
-    getAttendanceReport({ from: from ?? "", to: to ?? "", search, department, status }, { page: page - 1, pageSize: 25 }),
+    getAttendanceReport({ from: from ?? "", to: to ?? "", search, department, status }, { page, pageSize: 25 }),
     getDepartments(),
   ]);
 
@@ -88,12 +129,13 @@ export default async function ReportsPage({
           hint="tepat waktu"
           tone="success"
         />
-        <Stat label="Terlambat" value={report.summary.late} hint="perPage terlambat" tone="warning" />
+        <Stat label="Terlambat" value={report.summary.late} hint="melewati toleransi" tone="warning" />
         <Stat label="Alpa" value={report.summary.absent} hint="tidak tercatat" tone="danger" />
         <Stat
-          label="Rata-rata Durasi"
-          value={formatDuration(report.averageWorkedMinutes)}
-          hint="per hari hadir"
+          label="Izin / Sakit / Cuti"
+          value={report.summary.leave}
+          hint="tidak masuk resmi"
+          tone="info"
         />
       </div>
 
@@ -102,24 +144,15 @@ export default async function ReportsPage({
           <AttendanceFilters
             basePath="/admin/reports"
             showSearch
-            extra={
-              <>
-<DepartmentSelect basePath="/admin/reports" departments={departments} />
-              <ExportCsvButton basePath="/api/attendance/export" />
-              </>
-            }
+            extra={<DepartmentSelect basePath="/admin/reports" departments={departments} />}
           />
         </Suspense>
       </div>
 
       <div className="mt-4 sm:mt-5">
-        <ExportHint />
-      </div>
-
-      <div className="mt-4 grid gap-4 sm:mt-5 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
         <Surface className="overflow-hidden">
           <SurfaceHeader>
-            <SurfaceTitle>Detail Absensi</SurfaceTitle>
+            <SurfaceTitle>Detail Absensi Karyawan</SurfaceTitle>
             <SurfaceDescription className="mt-1">
               Setiap baris adalah satu catatan kehadiran karyawan pada satu hari.
             </SurfaceDescription>
@@ -151,11 +184,19 @@ export default async function ReportsPage({
                             {row.dateLabel}
                           </p>
                         </div>
-                        <StatusBadge
-                          label={descriptor.label}
-                          className={descriptor.className}
-                          dotClassName={descriptor.dotClassName}
-                        />
+                        <div className="flex shrink-0 flex-col items-end gap-1.5">
+                          <StatusBadge
+                            label={descriptor.label}
+                            className={descriptor.className}
+                            dotClassName={descriptor.dotClassName}
+                          />
+                          <ReportActions
+                            userId={row.userId}
+                            name={row.userName}
+                            fromKey={report.range.fromKey}
+                            toKey={report.range.toKey}
+                          />
+                        </div>
                       </div>
                       <dl className="tabular mt-3 grid grid-cols-4 gap-2 text-[12.5px]">
                         <div>
@@ -195,7 +236,7 @@ export default async function ReportsPage({
                       <th scope="col" className="px-4 py-3 font-medium">Masuk</th>
                       <th scope="col" className="px-4 py-3 font-medium">Keluar</th>
                       <th scope="col" className="px-4 py-3 font-medium">Durasi</th>
-                      <th scope="col" className="px-6 py-3 text-right font-medium">Catatan</th>
+                      <th scope="col" className="px-6 py-3 text-right font-medium">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -222,17 +263,15 @@ export default async function ReportsPage({
                           <td className="tabular px-4 py-3.5 whitespace-nowrap">
                             {formatDuration(row.workedMinutes)}
                           </td>
-                          <td className="px-6 py-3.5 text-right text-[12px] text-muted-foreground">
-                            {row.lateMinutes > 0 ? (
-                              <span>Telat {row.lateMinutes} mnt</span>
-                            ) : null}
-                            {row.outsideRadius ? (
-                              <span className="ml-2 inline-flex items-center gap-1">
-                                <MapPin className="size-3" />
-                                luar radius
-                              </span>
-                            ) : null}
-                            {row.lateMinutes === 0 && !row.outsideRadius ? "—" : null}
+                          <td className="px-6 py-3.5">
+                            <div className="flex justify-end">
+                              <ReportActions
+                                userId={row.userId}
+                                name={row.userName}
+                                fromKey={report.range.fromKey}
+                                toKey={report.range.toKey}
+                              />
+                            </div>
                           </td>
                         </tr>
                       );
@@ -258,83 +297,6 @@ export default async function ReportsPage({
             </>
           )}
         </Surface>
-
-        <div className="flex flex-col gap-4 sm:gap-6">
-          <Surface>
-            <SurfaceHeader>
-              <SurfaceTitle>Per Karyawan</SurfaceTitle>
-              <SurfaceDescription className="mt-1">
-                Rekap kehadiran pada filter aktif.
-              </SurfaceDescription>
-            </SurfaceHeader>
-            <SurfaceBody className="space-y-4">
-              <div>
-                <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                  <span className="text-[12.5px] text-muted-foreground">Kehadiran</span>
-                  <span className="tabular text-[12.5px] font-semibold">
-                    {report.summary.attendanceRate}%
-                  </span>
-                </div>
-                <ProgressMeter value={report.summary.attendanceRate} tone="success" label="Kehadiran" />
-              </div>
-              <div>
-                <div className="mb-1.5 flex items-baseline justify-between gap-3">
-                  <span className="text-[12.5px] text-muted-foreground">Ketepatan</span>
-                  <span className="tabular text-[12.5px] font-semibold">
-                    {report.summary.punctualityRate}%
-                  </span>
-                </div>
-                <ProgressMeter
-                  value={report.summary.punctualityRate}
-                  tone={report.summary.punctualityRate >= 90 ? "primary" : "warning"}
-                  label="Ketepatan"
-                />
-              </div>
-            </SurfaceBody>
-          </Surface>
-
-          <Surface>
-            <SurfaceHeader>
-              <SurfaceTitle>Ringkasan Per Karyawan</SurfaceTitle>
-            </SurfaceHeader>
-            {report.perEmployee.length === 0 ? (
-              <SurfaceBody>
-                <p className="py-6 text-center text-[13px] text-muted-foreground">
-                  Tidak ada data.
-                </p>
-              </SurfaceBody>
-            ) : (
-              <ul className="divide-y divide-border">
-                {report.perEmployee.map((employee) => (
-                  <li key={employee.userId} className="px-5 py-3.5">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="truncate text-[13px] font-medium text-foreground">
-                        {employee.name}
-                      </span>
-                      <span className="tabular shrink-0 text-[12.5px] font-semibold">
-                        {employee.summary.attendanceRate}%
-                      </span>
-                    </div>
-                    <p className="mt-0.5 truncate text-[11.5px] text-muted-foreground">
-                      {employee.employeeCode ?? "—"} · {employee.department ?? "Tanpa departemen"}
-                    </p>
-                    <div className="mt-2">
-                      <ProgressMeter
-                        value={employee.summary.attendanceRate}
-                        tone={employee.summary.attendanceRate >= 85 ? "success" : "warning"}
-                        label={`Kehadiran ${employee.name}`}
-                      />
-                    </div>
-                    <p className="tabular mt-1.5 text-[11.5px] text-muted-foreground">
-                      {employee.summary.present} hadir · {employee.summary.late} telat ·{" "}
-                      {employee.summary.absent} alpa
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Surface>
-        </div>
       </div>
     </div>
   );

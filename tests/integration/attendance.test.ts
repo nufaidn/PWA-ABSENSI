@@ -441,7 +441,7 @@ describe("personal schedule overrides the organization default", () => {
 
 describe("administrator exemption", () => {
   it("refuses check-in and check-out for an administrator", async () => {
-    currentUser.role = "SUPER_ADMIN";
+    currentUser.role = "ADMIN";
 
     await expect(checkIn({ now: at("08:55") })).rejects.toMatchObject({
       code: "ADMIN_EXEMPT",

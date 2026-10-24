@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireRole } from "@/lib/dal/auth";
 import { getEmployees } from "@/lib/dal/employees";
 import { getActiveSchedules } from "@/lib/dal/settings";
-import { hasRole, type Role } from "@/lib/attendance/time";
+import type { Role } from "@/lib/attendance/time";
 import {
   Surface,
   SurfaceDescription,
@@ -22,7 +21,7 @@ function readParam(value: string | string[] | undefined): string | undefined {
   return raw && raw.length > 0 ? raw : undefined;
 }
 
-/** Employee management. ADMIN and above. */
+/** Employee management. ADMIN only. */
 export default async function EmployeesPage({
   searchParams,
 }: {
@@ -32,7 +31,7 @@ export default async function EmployeesPage({
   const params = (await searchParams) ?? {};
 
   const roleParam = readParam(params.role);
-  const allowed: Role[] = ["EMPLOYEE", "ADMIN", "SUPER_ADMIN"];
+  const allowed: Role[] = ["EMPLOYEE", "INTERN", "ADMIN"];
   const role = (allowed.includes(roleParam as Role) ? roleParam : "ALL") as Role | "ALL";
   const activeParam = readParam(params.active);
   const active = (
@@ -43,8 +42,6 @@ export default async function EmployeesPage({
     getEmployees({ search: readParam(params.search), role, active }),
     getActiveSchedules(),
   ]);
-
-  if (!hasRole(user.role, "ADMIN")) redirect("/admin/overview");
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
@@ -86,7 +83,6 @@ export default async function EmployeesPage({
               name: schedule.name,
               workingDays: schedule.workingDays,
             }))}
-            canManageRoles={hasRole(user.role, "SUPER_ADMIN")}
             currentUserId={user.id}
           />
         </Suspense>

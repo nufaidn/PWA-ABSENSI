@@ -59,7 +59,7 @@ const optionalShortText = z
   .optional()
   .transform((value) => (value ? value : null));
 
-const roleEnum = z.enum(["EMPLOYEE", "INTERN", "ADMIN", "SUPER_ADMIN"]);
+const roleEnum = z.enum(["EMPLOYEE", "INTERN", "ADMIN"]);
 
 const attendanceStatusEnum = z.enum([
   "PRESENT",
@@ -268,6 +268,85 @@ export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).max(10_000).default(1),
   pageSize: z.coerce.number().int().min(5).max(200).default(20),
 });
+
+// ---------------------------------------------------------------------------
+// Leave requests (cuti / izin / sakit)
+// ---------------------------------------------------------------------------
+
+const leaveTypeEnum = z.enum(["CUTI", "IZIN", "SAKIT"]);
+
+function inclusiveDayCount(from: string, to: string): number {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+  return Math.round((end - start) / 86_400_000) + 1;
+}
+
+/**
+ * One request covers an inclusive date range and is written straight to
+ * attendance as `LEAVE`, so the form has to be stricter than a normal note:
+ * the range is capped, overlapping requests are rejected by the DAL, and the
+ * two type-specific rules from the product brief are enforced here.
+ */
+export const leaveRequestSchema = z
+  .object({
+    type: leaveTypeEnum,
+    startDate: dateKey,
+    endDate: dateKey,
+    reason: z
+      .string()
+      .trim()
+      .max(500, "Keterangan maksimal 500 karakter.")
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : null)),
+    doctorNoteUrl: z
+      .string()
+      .trim()
+      .max(2048, "URL surat dokter terlalu panjang.")
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : null)),
+    doctorNotePublicId: z
+      .string()
+      .trim()
+      .max(200, "ID surat dokter terlalu panjang.")
+      .optional()
+      .transform((value) => (value && value.length > 0 ? value : null)),
+  })
+  .superRefine((data, ctx) => {
+    if (data.endDate < data.startDate) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["endDate"],
+        message: "Tanggal selesai tidak boleh sebelum tanggal mulai.",
+      });
+      return;
+    }
+
+    if (inclusiveDayCount(data.startDate, data.endDate) > 31) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["endDate"],
+        message: "Satu pengajuan maksimal 31 hari. Pecah menjadi beberapa pengajuan.",
+      });
+    }
+
+    if (data.type === "IZIN" && (!data.reason || data.reason.length < 10)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["reason"],
+        message: "Alasan izin wajib diisi, minimal 10 karakter.",
+      });
+    }
+
+    if (data.type === "SAKIT" && !data.doctorNoteUrl) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["doctorNoteUrl"],
+        message: "Surat dokter wajib diunggah untuk pengajuan sakit.",
+      });
+    }
+  });
+
+export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>;
 
 // ---------------------------------------------------------------------------
 // Settings & locations

@@ -69,16 +69,18 @@ describe("bottom tab bar", () => {
     for (const label of ["Beranda", "Riwayat", "Statistik"]) {
       expect(screen.queryByRole("link", { name: label })).not.toBeInTheDocument();
     }
-    for (const label of ["Ringkasan", "Laporan", "Karyawan", "Jadwal Kerja"]) {
+    for (const label of ["Ringkasan", "Laporan", "Karyawan", "Cuti & Izin"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
   });
 
-  it("shows every employee destination in the bar", () => {
+  it("shows every daily employee destination in the bar", () => {
     renderNav();
-    for (const label of ["Beranda", "Riwayat", "Statistik", "Pengaturan", "Profil"]) {
+    for (const label of ["Beranda", "Riwayat", "Cuti & Izin", "Statistik", "Pengaturan"]) {
       expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
     }
+    // Profile no longer fits in the five-tab bar; it lives in the overflow menu.
+    expect(screen.queryByRole("link", { name: "Profil" })).not.toBeInTheDocument();
   });
 
   it("keeps touch targets at a usable height", () => {
@@ -163,9 +165,10 @@ it("opens, closes on a second press, and reflects state via aria-expanded", asyn
     await click(screen.getByRole("button", { name: "Buka menu" }));
 
     const menu = screen.getByRole("menu");
-    // All five employee pages fit in the bar, so the menu holds only identity
-    // and sign-out — no duplicate links to what is already one tap away.
+    // Five daily pages fill the bar; the profile lives here without duplicating
+    // anything already one tap away.
     expect(within(menu).queryByRole("link", { name: "Riwayat" })).not.toBeInTheDocument();
+    expect(within(menu).getByRole("link", { name: "Profil" })).toBeInTheDocument();
     expect(menu).toHaveTextContent("Keluar");
   });
 });

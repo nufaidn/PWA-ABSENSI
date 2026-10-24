@@ -121,14 +121,7 @@ describe("employee sign-in", () => {
 });
 
 describe("admin sign-in gate", () => {
-  it("admits a super admin", async () => {
-    await makeUser({ email: "admin@gmail.com", password: "rahasia123", role: Role.SUPER_ADMIN });
-
-    const user = await verifyAdminCredentials("admin@gmail.com", "rahasia123");
-    expect(user?.role).toBe(Role.SUPER_ADMIN);
-  });
-
-  it("admits a plain admin", async () => {
+  it("admits an admin", async () => {
     await makeUser({ email: "admin@company.test", password: "rahasia123", role: Role.ADMIN });
 
     expect(await verifyAdminCredentials("admin@company.test", "rahasia123")).not.toBeNull();

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  CalendarPlus,
   ChartColumn,
   CircleUserRound,
   ClipboardList,
@@ -49,6 +50,7 @@ const RANK = ROLE_RANK;
 export const EMPLOYEE_NAV: NavItem[] = [
   { href: "/dashboard", label: "Beranda", icon: LayoutDashboard },
   { href: "/attendance", label: "Riwayat", icon: CalendarDays },
+  { href: "/cuti-izin", label: "Cuti & Izin", icon: CalendarPlus },
   { href: "/statistics", label: "Statistik", icon: ChartColumn },
   { href: "/pengaturan", label: "Pengaturan", icon: Settings },
   { href: "/profile", label: "Profil", icon: CircleUserRound },
@@ -58,8 +60,9 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/overview", label: "Ringkasan", icon: LayoutDashboard, minRole: "ADMIN" },
   { href: "/admin/reports", label: "Laporan", icon: FileClock, minRole: "ADMIN" },
   { href: "/admin/employees", label: "Karyawan", icon: Users, minRole: "ADMIN" },
+  { href: "/admin/leave", label: "Cuti & Izin", icon: CalendarPlus, minRole: "ADMIN" },
   { href: "/admin/schedules", label: "Jadwal Kerja", icon: ClipboardList, minRole: "ADMIN" },
-  { href: "/admin/settings", label: "Pengaturan", icon: Settings, minRole: "SUPER_ADMIN" },
+  { href: "/admin/settings", label: "Pengaturan", icon: Settings, minRole: "ADMIN" },
   { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, minRole: "ADMIN" },
 ];
 
@@ -215,10 +218,11 @@ export function MobileNav({
   const isAdmin = RANK[user.role] >= RANK.ADMIN;
 
   // Five destinations fit comfortably in the employee bar — home, history,
-  // statistics, the gear tab and, as its own entry point, the profile tab the
-  // gear page deliberately does not duplicate. Admins keep four admin pages and
-  // reach the audit log and device permissions behind the overflow menu.
-  const primary: NavItem[] = isAdmin ? ADMIN_NAV.slice(0, 4) : EMPLOYEE_NAV;
+  // leave, statistics and the gear tab. The profile tab lives behind the
+  // overflow menu. Admins keep four daily pages (overview, reports, employees,
+  // leave) and reach schedules, settings and the audit log behind the overflow
+  // menu.
+  const primary: NavItem[] = isAdmin ? ADMIN_NAV.slice(0, 4) : EMPLOYEE_NAV.slice(0, 5);
 
   const overflow: NavItem[] = isAdmin ? ADMIN_NAV.slice(4) : EMPLOYEE_NAV.slice(5);
 

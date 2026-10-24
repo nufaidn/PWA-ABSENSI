@@ -14,9 +14,9 @@ export const metadata: Metadata = {
   title: "Pengaturan",
 };
 
-/** Global settings and geo-fences. SUPER_ADMIN only. */
+/** Global settings and geo-fences. ADMIN only. */
 export default async function SettingsPage() {
-  await requireRole("SUPER_ADMIN");
+  await requireRole("ADMIN");
 
   const [settings, schedules, fences] = await Promise.all([
     getSettings(),
@@ -42,7 +42,7 @@ export default async function SettingsPage() {
           <SurfaceHeader>
             <SurfaceTitle>Konfigurasi Umum</SurfaceTitle>
             <SurfaceDescription className="mt-1">
-              Berlaku untuk seluruh karyawan dan tidak dapat diubah oleh admin biasa.
+              Berlaku untuk seluruh karyawan dan hanya dapat diubah oleh admin.
             </SurfaceDescription>
           </SurfaceHeader>
 

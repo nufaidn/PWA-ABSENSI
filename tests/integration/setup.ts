@@ -290,7 +290,7 @@ export const currentUser = {
   name: "Test Employee",
   // Not `as const`: suites sign in as an admin, and a narrower type here would
   // make that assignment a compile error rather than a test failure.
-  role: "EMPLOYEE" as "EMPLOYEE" | "INTERN" | "ADMIN" | "SUPER_ADMIN",
+  role: "EMPLOYEE" as "EMPLOYEE" | "INTERN" | "ADMIN",
   department: null,
   employeeCode: null,
   phone: null,
@@ -359,7 +359,7 @@ export async function seedSchedule(overrides: ScheduleSeed = {}) {
 export interface UserSeed {
   email?: string;
   name?: string;
-  role?: "EMPLOYEE" | "INTERN" | "ADMIN" | "SUPER_ADMIN";
+  role?: "EMPLOYEE" | "INTERN" | "ADMIN";
   scheduleId?: string | null;
   isActive?: boolean;
 }
@@ -425,7 +425,7 @@ export function signInAs(user: {
   id: string;
   email: string;
   name: string;
-  role?: "EMPLOYEE" | "INTERN" | "ADMIN" | "SUPER_ADMIN";
+  role?: "EMPLOYEE" | "INTERN" | "ADMIN";
 }): void {
   currentUser.id = user.id;
   currentUser.email = user.email;
@@ -445,11 +445,11 @@ export async function seedAdmin(email = `admin-${Date.now()}@attendance.test`) {
       email,
       passwordHash: "not-used-in-these-tests",
       name: "Test Admin",
-      role: "SUPER_ADMIN",
+      role: "ADMIN",
       isActive: true,
     },
   });
-  currentUser.role = "SUPER_ADMIN";
+  currentUser.role = "ADMIN";
   signInAs(admin);
   return admin;
 }

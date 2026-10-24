@@ -44,7 +44,7 @@ function assertDemoSeedAllowed(): void {
 
   throw new Error(
     "Refusing to seed demo data in production.\n" +
-      "These accounts all share one well-known password, including SUPER_ADMIN.\n" +
+      "These accounts all share one well-known password, including the admin account.\n" +
       "To seed anyway, set SEED_ALLOW_DEMO_DATA=true explicitly.",
   );
 }
@@ -218,7 +218,7 @@ const USERS: Array<{
   schedule: string;
   isActive?: boolean;
 }> = [
-  { email: "superadmin@demo.test", name: "Rina Hartati", employeeCode: "ADM-001", role: "SUPER_ADMIN", department: "Direksi", phone: "+62 812-1000-0001", schedule: "Jam Kerja Reguler" },
+  { email: "superadmin@demo.test", name: "Rina Hartati", employeeCode: "ADM-001", role: "ADMIN", department: "Direksi", phone: "+62 812-1000-0001", schedule: "Jam Kerja Reguler" },
   { email: "admin@demo.test", name: "Dimas Prasetyo", employeeCode: "ADM-002", role: "ADMIN", department: "Sumber Daya Manusia", phone: "+62 812-1000-0002", schedule: "Jam Kerja Reguler" },
   { email: "admin2@demo.test", name: "Putri Maharani", employeeCode: "ADM-003", role: "ADMIN", department: "Operasional", phone: "+62 812-1000-0003", schedule: "Jam Kerja Reguler" },
 
@@ -565,7 +565,7 @@ async function main() {
   }
 
   console.log("\nSeed complete. Demo accounts:\n");
-  for (const role of [Role.SUPER_ADMIN, Role.ADMIN, Role.EMPLOYEE, Role.INTERN]) {
+  for (const role of [Role.ADMIN, Role.EMPLOYEE, Role.INTERN]) {
     const sample = USERS.find((definition) => definition.role === role);
     if (!sample) continue;
     console.log(

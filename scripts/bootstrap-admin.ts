@@ -4,7 +4,7 @@ import { randomBytes } from "node:crypto";
 import { firestore } from "../src/lib/firebase-config";
 
 /**
- * Creates the single SUPER_ADMIN account a fresh deployment needs.
+ * Creates the first ADMIN account a fresh deployment needs.
  *
  * Replaces the demo seed for anything reachable by other people. There is no
  * "first run" signup in the app by design — the role gate in `lib/dal/auth.ts`
@@ -55,7 +55,7 @@ async function main(): Promise<void> {
     passwordHash,
     name: "Administrator",
     employeeCode: null,
-    role: "SUPER_ADMIN",
+    role: "ADMIN",
     department: null,
     phone: null,
     isActive: true,
@@ -79,7 +79,7 @@ async function main(): Promise<void> {
   );
   await batch.commit();
 
-  console.log(`SUPER_ADMIN created: ${email}`);
+  console.log(`ADMIN created: ${email}`);
   console.log(`Password: ${password}`);
   console.log("\nSign in, then change this password immediately (Profil → Ganti password).");
 }

@@ -31,12 +31,10 @@ export interface RosterEntry extends EmployeeFormValues {
 export function EmployeeRoster({
   employees,
   schedules,
-  canManageRoles,
   currentUserId,
 }: {
   employees: RosterEntry[];
   schedules: Array<{ id: string; name: string; workingDays: number[] }>;
-  canManageRoles: boolean;
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -96,8 +94,8 @@ export function EmployeeRoster({
         >
           <option value="ALL">Semua role</option>
           <option value="EMPLOYEE">Karyawan</option>
+          <option value="INTERN">Magang</option>
           <option value="ADMIN">Admin</option>
-          <option value="SUPER_ADMIN">Super Admin</option>
         </select>
 
         <select
@@ -159,12 +157,10 @@ export function EmployeeRoster({
               <div className="flex items-center gap-1.5">
                 <ActiveToggle
                   employee={employee}
-                  // Guard rails that mirror the server-side invariants, so the
-                  // UI does not offer an action the server will reject.
-                  disabled={
-                    employee.id === currentUserId ||
-                    (employee.role === "SUPER_ADMIN" && employee.isActive)
-                  }
+                  // The server refuses to deactivate the last active admin and
+                  // the caller cannot deactivate themselves, so mirror just the
+                  // self case here.
+                  disabled={employee.id === currentUserId}
                 />
                 <Button
                   variant="ghost"
@@ -232,12 +228,10 @@ export function EmployeeRoster({
         <AddEmployeeButton onClick={() => setCreating(true)} />
       </div>
 
-      {canManageRoles ? null : (
-        <p className="text-[12px] text-muted-foreground">
-          Role di atas akun Anda tidak dapat ditetapkan, dan akun Anda sendiri tidak dapat
-          dinonaktifkan atau dihapus.
-        </p>
-      )}
+      <p className="text-[12px] text-muted-foreground">
+        Role di atas akun Anda tidak dapat ditetapkan, dan akun Anda sendiri tidak dapat
+        dinonaktifkan atau dihapus.
+      </p>
     </div>
   );
 }

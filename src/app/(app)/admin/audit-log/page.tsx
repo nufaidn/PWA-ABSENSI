@@ -37,7 +37,7 @@ function formatTimestamp(date: Date, timezone: string): string {
  * Administrative audit trail.
  *
  * Append-only: there is intentionally no mutation surface for audit rows, so
- * the log cannot be edited from the UI even by a super admin.
+ * the log cannot be edited from the UI even by an admin.
  */
 export default async function AuditLogPage({
   searchParams,

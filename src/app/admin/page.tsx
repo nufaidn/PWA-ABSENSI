@@ -69,7 +69,7 @@ export default async function AdminLoginPage({
               <div className="mb-5">
                 <h2 className="text-[15px] font-semibold tracking-tight">Masuk sebagai Admin</h2>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-muted-foreground">
-                  Gunakan akun dengan hak Admin atau Super Admin.
+                  Gunakan akun dengan hak Admin.
                 </p>
               </div>
 

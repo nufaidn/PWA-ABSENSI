@@ -18,7 +18,7 @@ import type { ActionState } from "@/lib/action-state";
 
 /**
  * Schedule, location and global settings Server Actions.
- * Settings mutation is restricted to SUPER_ADMIN.
+ * Settings mutation is restricted to ADMIN.
  */
 
 function toState(error: unknown): { error: string } {
@@ -148,7 +148,7 @@ export async function createLocationAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const actor = await assertRole("SUPER_ADMIN");
+  const actor = await assertRole("ADMIN");
   const parsed = locationSchema.safeParse({
     name: formData.get("name"),
     address: formData.get("address") || undefined,
@@ -187,7 +187,7 @@ export async function updateLocationAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const actor = await assertRole("SUPER_ADMIN");
+  const actor = await assertRole("ADMIN");
   const id = formData.get("id");
   if (typeof id !== "string" || id.length === 0) {
     return { ok: false, error: "ID lokasi tidak valid." };
@@ -236,7 +236,7 @@ export async function deleteLocationAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const actor = await assertRole("SUPER_ADMIN");
+  const actor = await assertRole("ADMIN");
   const parsed = deleteLocationSchema.safeParse({ id: formData.get("id") });
   if (!parsed.success) return { ok: false, error: "Permintaan tidak valid." };
 
@@ -269,7 +269,7 @@ export async function updateSettingsAction(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const actor = await assertRole("SUPER_ADMIN");
+  const actor = await assertRole("ADMIN");
   const parsed = settingsSchema.safeParse({
     organizationName: formData.get("organizationName"),
     timezone: formData.get("timezone"),

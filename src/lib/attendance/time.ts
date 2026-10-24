@@ -299,14 +299,12 @@ export const ROLE_RANK: Record<Role, number> = {
   EMPLOYEE: 1,
   INTERN: 1,
   ADMIN: 2,
-  SUPER_ADMIN: 3,
 };
 
 export const ROLE_LABEL: Record<Role, string> = {
   EMPLOYEE: "Karyawan",
   INTERN: "Magang",
   ADMIN: "Admin",
-  SUPER_ADMIN: "Super Admin",
 };
 
 /** Roles that sign in through the employee form and need an employee code. */

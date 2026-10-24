@@ -56,7 +56,7 @@ describe("allocateEmployeeCode", () => {
 
   it("returns null for a role that does not use codes", async () => {
     expect(await allocateEmployeeCode(Role.ADMIN)).toBeNull();
-    expect(await allocateEmployeeCode(Role.SUPER_ADMIN)).toBeNull();
+    expect(await allocateEmployeeCode(Role.ADMIN)).toBeNull();
   });
 
   it("ignores legacy codes outside the format", async () => {

@@ -11,8 +11,8 @@ import { INITIAL_ACTION_STATE, type ActionState } from "@/lib/action-state";
 /**
  * Organization settings form.
  *
- * Only SUPER_ADMIN can reach this screen, and the Server Action enforces the
- * same requirement independently.
+ * Only ADMIN can reach this screen, and the Server Action enforces the same
+ * requirement independently.
  */
 
 export interface SettingsFormValues {

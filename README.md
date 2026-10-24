@@ -9,9 +9,13 @@ akses data; browser tidak pernah memegang kredensial database.
 - Check-in / check-out dengan waktu dari server, toleransi keterlambatan, dan
   validasi geo-fence opsional.
 - Dashboard karyawan, riwayat absensi, dan statistik pribadi.
-- Area admin: karyawan, jadwal, lokasi, laporan + export CSV, audit log.
-- `ADMIN` dan `SUPER_ADMIN` dikecualikan dari absensi dan tidak melihat menu
-  absensi.
+- Pengajuan **cuti, izin, dan sakit** untuk karyawan/magang. Pengajuan langsung
+  tercatat sebagai `LEAVE` pada hari kerja; izin wajib memuat alasan dan sakit
+  wajib memuat surat dokter (unggah Cloudinary).
+- Area admin: karyawan, jadwal, lokasi, cuti & izin, laporan + unduh PDF per
+  karyawan, audit log.
+- Tiga role: `ADMIN`, `EMPLOYEE`, `INTERN`. Admin dikecualikan dari absensi dan
+  tidak melihat menu absensi.
 - Sesi JWT `httpOnly` + bcrypt; role selalu dibaca ulang dari Firestore.
 - Realtime dashboard admin lewat SSE yang dipicu dokumen
   `realtime/attendance`.
@@ -49,11 +53,17 @@ akses data; browser tidak pernah memegang kredensial database.
    Alternatif: isi `FIREBASE_SERVICE_ACCOUNT_JSON` dengan seluruh JSON service
    account (satu baris atau base64). Jangan pernah commit nilai asli.
 
+   Untuk unggah surat dokter, tambahkan kredensial Cloudinary
+   (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`).
+   Tanpa nilai ini, cuti dan izin tetap bisa diajukan; hanya pengajuan sakit yang
+   tidak dapat mengunggah lampiran. Browser mengunggah langsung ke Cloudinary
+   memakai signature berumur pendek, jadi API secret tidak pernah sampai ke client.
+
 3. Pilih salah satu:
 
    ```bash
    npm run db:seed          # data demo (jangan di production)
-   npm run bootstrap:admin  # satu akun SUPER_ADMIN untuk deployment nyata
+   npm run bootstrap:admin  # satu akun ADMIN untuk deployment nyata
    ```
 
 4. Jalankan:
@@ -74,7 +84,7 @@ akses data; browser tidak pernah memegang kredensial database.
 | `npm run test:integration` | Integration test dengan Firestore Emulator. |
 | `npm run db:check` | Cek koneksi Firestore dan jumlah dokumen. |
 | `npm run db:seed` | Seed data demo. |
-| `npm run bootstrap:admin` | Buat SUPER_ADMIN pertama. |
+| `npm run bootstrap:admin` | Buat ADMIN pertama. |
 | `npm run db:migrate-from-postgres -- --apply` | Impor data PostgreSQL/Supabase lama (sekali pakai). |
 | `npm run db:purge-demo -- --apply` | Hapus akun demo. |
 | `npm run db:purge-reference -- --apply` | Hapus jadwal & lokasi demo. |
@@ -95,6 +105,8 @@ Tambahkan environment berikut di Vercel (Production dan Preview):
 - `FIREBASE_CLIENT_EMAIL`
 - `FIREBASE_PRIVATE_KEY`
 - `AUTH_SECRET`
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
+  (wajib untuk pengajuan sakit; `CLOUDINARY_FOLDER` opsional)
 - `SESSION_MAX_AGE` (opsional)
 
 `DATABASE_URL` dan `DATABASE_SSL` tidak lagi dipakai runtime. Setelah env diisi,

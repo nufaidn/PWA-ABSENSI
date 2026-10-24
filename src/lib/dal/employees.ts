@@ -28,7 +28,7 @@ import type { ScheduleWithUsage } from "./settings";
  *
  * Two invariants are enforced here rather than in the UI:
  *   1. An administrator can never escalate a user above their own rank.
- *   2. The last remaining super admin cannot be demoted or removed.
+ *   2. The last remaining active admin cannot be demoted, deactivated or removed.
  *
  * Firestore has no unique indexes, so email and employee-code uniqueness live in
  * dedicated documents (`userEmails/{email}` and `employeeCodes/{code}`) written
@@ -398,8 +398,13 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
   if (input.role && !hasRole(actor.role, input.role)) {
     throw new ForbiddenError("Anda tidak dapat menetapkan role di atas akun Anda.");
   }
-  if (input.role && existing.role === "SUPER_ADMIN" && input.role !== "SUPER_ADMIN") {
-    await assertNotLastSuperAdmin(id);
+  if (
+    input.role &&
+    existing.role === "ADMIN" &&
+    existing.isActive &&
+    input.role !== "ADMIN"
+  ) {
+    await assertNotLastAdmin(id);
   }
 
   const nextEmail =
@@ -475,12 +480,16 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
 
 export async function setEmployeeActive(id: string, isActive: boolean): Promise<void> {
   const actor = await assertRole("ADMIN");
+  if (actor.id === id && !isActive) {
+    throw new ForbiddenError("Anda tidak dapat menonaktifkan akun Anda sendiri.");
+  }
+
   const existing = await getUserById(id);
   if (!existing) throw new NotFoundError("Karyawan tidak ditemukan.");
 
   // Without this guard an admin could lock every administrator out of the app.
-  if (!isActive && existing.role === "SUPER_ADMIN") {
-    await assertNotLastSuperAdmin(id);
+  if (!isActive && existing.role === "ADMIN" && existing.isActive) {
+    await assertNotLastAdmin(id);
   }
 
   await users().doc(id).update({ isActive, updatedAt: new Date() });
@@ -502,8 +511,8 @@ export async function deleteEmployee(id: string): Promise<void> {
 
   const existing = await getUserById(id);
   if (!existing) throw new NotFoundError("Karyawan tidak ditemukan.");
-  if (existing.role === "SUPER_ADMIN") {
-    await assertNotLastSuperAdmin(id);
+  if (existing.role === "ADMIN" && existing.isActive) {
+    await assertNotLastAdmin(id);
   }
 
   // Firestore has no cascading delete. Attendance rows are removed first so a
@@ -552,18 +561,17 @@ export async function resetEmployeePassword(id: string, newPassword: string): Pr
   });
 }
 
-/** Blocks any change that would remove the organization's last super admin. */
-async function assertNotLastSuperAdmin(excludingUserId: string): Promise<void> {
+/** Blocks any change that would remove the organization's last active admin. */
+async function assertNotLastAdmin(excludingUserId: string): Promise<void> {
   const snapshot = await users().get();
   const remaining = snapshot.docs
     .map((doc) => toUser(doc.id, doc.data()))
     .filter(
-      (user) =>
-        user.role === "SUPER_ADMIN" && user.isActive && user.id !== excludingUserId,
+      (user) => user.role === "ADMIN" && user.isActive && user.id !== excludingUserId,
     ).length;
   if (remaining === 0) {
     throw new ForbiddenError(
-      "Ini adalah satu-satunya Super Admin aktif. Promosikan admin terlebih dahulu.",
+      "Ini adalah satu-satunya admin aktif. Promosikan admin lain terlebih dahulu.",
     );
   }
 }

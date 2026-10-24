@@ -5,12 +5,15 @@ import { WEEKDAY_INDEXES } from "@/lib/attendance/time";
 import {
   AuditAction,
   AttendanceStatus,
+  LeaveType,
   Role,
   isAttendanceStatus,
   isAuditAction,
+  isLeaveType,
   isRole,
   type Attendance,
   type AuditLog,
+  type LeaveRequest,
   type Setting,
   type User,
   type WorkLocation,
@@ -32,6 +35,7 @@ export const COLLECTIONS = {
   locations: "locations",
   settings: "settings",
   attendance: "attendance",
+  leaveRequests: "leaveRequests",
   auditLogs: "auditLogs",
   employeeCodes: "employeeCodes",
   userEmails: "userEmails",
@@ -117,7 +121,16 @@ export function toUser(id: string, data: DocumentData): User {
     passwordHash: stringOr(data.passwordHash),
     name: stringOr(data.name),
     employeeCode: nullableString(data.employeeCode),
-    role: isRole(data.role) ? data.role : Role.EMPLOYEE,
+    /*
+     * `SUPER_ADMIN` was removed from the role set. Existing documents are
+     * mapped to ADMIN rather than to EMPLOYEE so a legacy super admin keeps
+     * access to the admin area on the first request after the upgrade.
+     */
+    role: data.role === "SUPER_ADMIN"
+      ? Role.ADMIN
+      : isRole(data.role)
+        ? data.role
+        : Role.EMPLOYEE,
     department: nullableString(data.department),
     phone: nullableString(data.phone),
     isActive: data.isActive !== false,
@@ -189,6 +202,23 @@ export function toSetting(id: string, data: DocumentData): Setting {
     defaultScheduleId: nullableString(data.defaultScheduleId),
     requireLocationValidation: booleanOr(data.requireLocationValidation),
     updatedAt: dateOr(data.updatedAt),
+  };
+}
+
+export function toLeaveRequest(id: string, data: DocumentData): LeaveRequest {
+  return {
+    id,
+    userId: stringOr(data.userId),
+    userName: stringOr(data.userName),
+    employeeCode: nullableString(data.employeeCode),
+    department: nullableString(data.department),
+    type: isLeaveType(data.type) ? data.type : LeaveType.IZIN,
+    startDate: workDateKey(data.startDate),
+    endDate: workDateKey(data.endDate),
+    reason: nullableString(data.reason),
+    doctorNoteUrl: nullableString(data.doctorNoteUrl),
+    doctorNotePublicId: nullableString(data.doctorNotePublicId),
+    createdAt: dateOr(data.createdAt),
   };
 }
 

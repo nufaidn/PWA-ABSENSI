@@ -31,7 +31,7 @@ Prinsip utama:
 ```
 scripts/
   seed-firestore.ts      Data dummy untuk demo
-  bootstrap-admin.ts     Membuat SUPER_ADMIN pertama
+  bootstrap-admin.ts     Membuat ADMIN pertama
   migrate-postgres-to-firestore.ts  Impor data lama (sekali pakai)
 src/
   app/
@@ -40,15 +40,17 @@ src/
       layout.tsx         Shell aplikasi (sidebar / bottom nav)
       dashboard/         Dashboard karyawan
       attendance/        Riwayat absensi + statistik karyawan
-      admin/             Area admin & super admin
+      cuti-izin/         Form & riwayat cuti/izin/sakit milik sendiri
+      admin/             Area admin
         employees/       CRUD karyawan
+        leave/           Riwayat cuti/izin/sakit seluruh karyawan
         schedules/       CRUD jadwal kerja
-        reports/         Laporan + filter + export CSV
+        reports/         Laporan + filter + unduh PDF per karyawan
         settings/        Pengaturan global
         audit-log/       Audit log
       profile/           Profil & ganti password
     api/
-      attendance/export  Route handler CSV export
+      attendance/report/[userId]  Route handler PDF laporan per karyawan
       health             Diagnosa deployment (kredensial + jangkauan Firestore)
     manifest.ts          Web App Manifest
   components/
@@ -62,6 +64,8 @@ src/
     db.ts                Singleton Firestore + mapper dokumen
     realtime.ts          Polling dokumen sinyal untuk SSE
     session.ts           Enkripsi/dekripsi cookie sesi (jose)
+    cloudinary.ts        Signature unggah surat dokter (API secret tetap di server)
+    leave.ts             Label & format tampilan cuti/izin/sakit
     dal/                 Data Access Layer — satu-satunya pintu ke DB
       auth.ts
       attendance.ts
@@ -69,6 +73,7 @@ src/
       schedules.ts
       settings.ts
       reports.ts
+      leave.ts
       audit.ts
     attendance/          Logika domain (murni, tanpa I/O → mudah diuji)
       time.ts            Perhitungan zona waktu / jam kerja
@@ -89,6 +94,7 @@ tests/                   Unit test Vitest
 | `users/{userId}` | Akun karyawan/admin. Menyimpan `passwordHash` (bcrypt), `role`, `isActive`. |
 | `schedules/{scheduleId}` | Jadwal kerja: jam mulai, jam selesai, toleransi keterlambatan, dan hari kerja yang berlaku. |
 | `attendance/{userId}_{YYYY-MM-DD}` | Satu dokumen per karyawan per hari kerja. Sumber kebenaran kehadiran. |
+| `leaveRequests/{requestId}` | Pengajuan cuti/izin/sakit: rentang tanggal, alasan, dan URL surat dokter. |
 | `locations/{locationId}` | Geo-fence (pusat + radius) untuk validasi lokasi opsional. |
 | `settings/organization` | Konfigurasi global (zona waktu, jadwal default, wajib lokasi). |
 | `auditLogs/{logId}` | Jejak aktivitas administratif. Append-only. |
@@ -183,9 +189,12 @@ menonaktifkan akun atau menurunkan role langsung berlaku tanpa menunggu token ke
 
 | Role | Cakupan |
 | --- | --- |
-| `EMPLOYEE` | Absen sendiri, lihat riwayat & statistik sendiri. |
-| `ADMIN` | Semua hak employee + kelola karyawan, jadwal, laporan, audit log. |
-| `SUPER_ADMIN` | Semua hak admin + kelola pengaturan global & role pengguna. |
+| `EMPLOYEE` | Absen sendiri, lihat riwayat & statistik sendiri, ajukan cuti/izin/sakit. |
+| `INTERN` | Sama dengan `EMPLOYEE`; kode karyawan berawalan `INT`. |
+| `ADMIN` | Kelola karyawan, jadwal, pengaturan, laporan, cuti/izin, dan audit log. Dikecualikan dari absensi. |
+
+Dokumen lama dengan role `SUPER_ADMIN` dibaca sebagai `ADMIN` oleh mapper, sehingga
+pemilik akun tidak kehilangan akses setelah role tersebut dihapus.
 
 Hierarki diimplementasikan sebagai urutan numerik (`ROLE_RANK`) sehingga pemeriksaan cukup
 `hasRole(user, 'ADMIN')`.
@@ -219,6 +228,26 @@ Hierarki diimplementasikan sebagai urutan numerik (`ROLE_RANK`) sehingga pemerik
 - Absensi tanpa `checkInAt` → ditolak.
 - `checkOutAt <= checkInAt` → ditolak.
 - Check-out kedua pada hari yang sama → ditolak (record sudah memiliki `checkOutAt`).
+
+### Cuti / izin / sakit (tanpa persetujuan)
+
+1. Karyawan atau magang membuka `/cuti-izin`, memilih jenis, rentang tanggal, dan
+   keterangan. Izin wajib memuat alasan minimal 10 karakter; sakit wajib memuat surat
+   dokter.
+2. Surat dokter diunggah **langsung dari browser ke Cloudinary** setelah server menandatangani
+   `folder` + `timestamp` dengan API secret. File tidak melewati Server Action, sehingga tidak
+   terkena batas body request.
+3. Server memvalidasi URL yang dikirim kembali: host harus `res.cloudinary.com`, berada di akun
+   Cloudinary yang dikonfigurasi, dan berada di subfolder milik karyawan tersebut.
+4. Satu batch Firestore menulis `leaveRequests/{requestId}` dan menandai setiap hari kerja pada
+   rentang tanggal sebagai `attendance.status = LEAVE`. Hari yang sudah memiliki check-in
+   dilewati, sehingga absensi nyata tidak tertimpa.
+5. Tidak ada status "menunggu persetujuan": pengajuan langsung efektif dan langsung terlihat di
+   laporan, statistik, serta dashboard admin.
+6. Rentang dengan cuti/izin/sakit yang sudah tercatat ditolak (`OVERLAP`) agar satu hari tidak
+   dihitung dua kali. Satu pengajuan dibatasi 31 hari kalender.
+7. Admin melihat seluruh pengajuan di `/admin/leave`, termasuk alasan dan tautan surat dokter.
+   Setiap pengajuan juga dicatat di audit log sebagai `LEAVE_REQUESTED`.
 
 ---
 
@@ -293,6 +322,8 @@ Environment yang dibutuhkan:
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | Alternatif: JSON service account dalam satu baris/base64. |
 | `FIRESTORE_EMULATOR_HOST` | Hanya untuk test lokal; diisi otomatis oleh `firebase emulators:exec`. |
 | `AUTH_SECRET` | Kunci penandatangan cookie sesi (HS256), minimal 32 karakter. |
+| `CLOUDINARY_CLOUD_NAME` + `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET` | Unggah surat dokter. Tanpa nilai ini, cuti/izin tetap berjalan tetapi sakit tidak dapat dilampiri. |
+| `CLOUDINARY_FOLDER` | Opsional; folder dasar Cloudinary (default `attendance/leave`). |
 
 `firestore.rules` menolak semua akses klien (`allow read, write: if false`). Aturan itu bukan
 satu-satunya lapisan: Admin SDK memang mem-bypass rules, dan browser tidak pernah memegang
@@ -316,6 +347,9 @@ Checklist sebelum deploy:
    menyalin newline asli ke dashboard.
 3. `AUTH_SECRET` diisi dengan nilai yang sama di semua environment. Mengganti `AUTH_SECRET`
    membuat semua sesi lama tidak valid (user harus login ulang).
+4. `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, dan `CLOUDINARY_API_SECRET` diisi bila
+   pengajuan sakit harus menerima surat dokter. Secret hanya dipakai di server untuk membuat
+   signature unggah.
 
 Verifikasi deployment tanpa membuka log server:
 
@@ -332,7 +366,7 @@ Perintah operasional:
 ```bash
 npm run db:check                  # cek koneksi + jumlah dokumen
 npm run db:seed                   # data demo (jangan di production)
-npm run bootstrap:admin           # SUPER_ADMIN pertama
+npm run bootstrap:admin           # ADMIN pertama
 npm run db:migrate-from-postgres -- --apply   # impor data Supabase lama (sekali pakai)
 ```
 
@@ -377,4 +411,6 @@ ditutup.
 | Role hierarchy | Rank numerik | Mempermudah pemeriksaan `hasRole`. |
 | Menit keterlambatan | Disimpan saat kejadian | Konsisten dengan aturan yang berlaku waktu itu. |
 | Geo-fence | Opsional via setting | Desktop sering tidak dapat mengambil lokasi; memaksa lokasi akan merusak UX. |
-| Format CSV | RFC 4180 + BOM UTF-8 | Excel di locale Indonesia menampilkan karakter non-ASCII dengan benar. |
+| Cuti/izin/sakit | Langsung tercatat sebagai `LEAVE`, tanpa approval | Requirement: pengajuan adalah catatan final. Menghindari antrean persetujuan yang tidak diminta. |
+| Surat dokter | Cloudinary, unggah langsung dengan signature | Firebase Storage membutuhkan paket Blaze; upload langsung juga menghindari batas body Server Action. |
+| Format PDF | `pdf-lib` + font standar Helvetica | Dibuat di server, tanpa browser atau layanan eksternal; teks non-Latin disanitasi agar tetap dapat di-encode. |
