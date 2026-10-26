@@ -223,23 +223,6 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
           <p className="tabular text-5xl font-black leading-none tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-foreground to-foreground/70">
             {liveClock}
           </p>
-          <div className="mt-2 space-y-1.5">
-            <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
-              <Clock className="size-4" />
-              <span>
-                Jadwal <span className="font-semibold text-foreground">{data.startTime}–{data.endTime}</span>
-                {data.lateToleranceMinutes > 0
-                  ? ` · toleransi ${data.lateToleranceMinutes} menit`
-                  : " · tanpa toleransi"}
-              </span>
-            </p>
-            {data.scheduleNote ? (
-              <p className="flex items-start gap-2 text-[12px] italic leading-relaxed text-muted-foreground bg-muted/30 rounded px-2.5 py-1.5">
-                <Info className="size-4 shrink-0 mt-0.5" />
-                <span>{data.scheduleNote}</span>
-              </p>
-            ) : null}
-          </div>
         </div>
 
         {/* Check-in/Check-out Stats */}
