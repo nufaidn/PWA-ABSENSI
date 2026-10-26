@@ -47,7 +47,6 @@ export default async function DashboardPage() {
                 <h1 className="text-[28px] font-bold tracking-tight text-foreground sm:text-[32px]">
                   Halo, {user.name.split(" ")[0]}
                 </h1>
-                <Hand className="size-8 text-yellow-500 rotate-12" />
               </div>
               {user.department && (
                 <p className="mt-1 text-[14px] text-muted-foreground">{user.department}</p>
@@ -83,12 +82,6 @@ export default async function DashboardPage() {
         {/* Quick Links Section */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <QuickLink
-            href="/attendance"
-            icon={Calendar}
-            label="Riwayat"
-            description="Lihat absensi"
-          />
-          <QuickLink
             href="/statistics"
             icon={TrendingUp}
             label="Statistik"
@@ -100,16 +93,10 @@ export default async function DashboardPage() {
             label="Cuti & Izin"
             description="Pengajuan"
           />
-          <QuickLink
-            href="/profile"
-            icon={MapPin}
-            label="Profil"
-            description="Pengaturan"
-          />
         </div>
 
         {/* Info Section */}
-        <div className="mt-8 space-y-3">
+        {/* <div className="mt-8 space-y-3">
           <InfoCard
             title="Jadwal Kerja"
             description={`${schedule.startTime} - ${schedule.endTime}`}
@@ -127,7 +114,7 @@ export default async function DashboardPage() {
             description={`${schedule.lateToleranceMinutes} menit`}
             accent="green"
           />
-        </div>
+        </div> */}
       </div>
     </div>
   );
