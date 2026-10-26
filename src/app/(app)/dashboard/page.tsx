@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Clock, MapPin, TrendingUp } from "lucide-react";
+import { Calendar, Clock, MapPin, TrendingUp, Hand } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getTodaySummary } from "@/lib/dal/attendance";
 import { formatShortDate, isAttendanceRole } from "@/lib/attendance/time";
@@ -43,9 +43,12 @@ export default async function DashboardPage() {
               <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
                 {formatShortDate(today.serverNow, timezone)}
               </p>
-              <h1 className="mt-2 text-[28px] font-bold tracking-tight text-foreground sm:text-[32px]">
-                Halo, {user.name.split(" ")[0]} 👋
-              </h1>
+              <div className="mt-2 flex items-center gap-3">
+                <h1 className="text-[28px] font-bold tracking-tight text-foreground sm:text-[32px]">
+                  Halo, {user.name.split(" ")[0]}
+                </h1>
+                <Hand className="size-8 text-yellow-500 rotate-12" />
+              </div>
               {user.department && (
                 <p className="mt-1 text-[14px] text-muted-foreground">{user.department}</p>
               )}

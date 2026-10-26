@@ -13,6 +13,10 @@ import {
   LogOut,
   MapPinOff,
   Navigation,
+  Clock,
+  AlertTriangle,
+  Lock,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -220,15 +224,19 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
             {liveClock}
           </p>
           <div className="mt-2 space-y-1.5">
-            <p className="text-[13px] text-muted-foreground">
-              📅 Jadwal <span className="font-semibold text-foreground">{data.startTime}–{data.endTime}</span>
-              {data.lateToleranceMinutes > 0
-                ? ` · ⏱️ toleransi ${data.lateToleranceMinutes} menit`
-                : " · tanpa toleransi"}
+            <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
+              <Clock className="size-4" />
+              <span>
+                Jadwal <span className="font-semibold text-foreground">{data.startTime}–{data.endTime}</span>
+                {data.lateToleranceMinutes > 0
+                  ? ` · toleransi ${data.lateToleranceMinutes} menit`
+                  : " · tanpa toleransi"}
+              </span>
             </p>
             {data.scheduleNote ? (
-              <p className="text-[12px] italic leading-relaxed text-muted-foreground bg-muted/30 rounded px-2.5 py-1.5">
-                ℹ️ {data.scheduleNote}
+              <p className="flex items-start gap-2 text-[12px] italic leading-relaxed text-muted-foreground bg-muted/30 rounded px-2.5 py-1.5">
+                <Info className="size-4 shrink-0 mt-0.5" />
+                <span>{data.scheduleNote}</span>
               </p>
             ) : null}
           </div>
@@ -237,30 +245,43 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
         {/* Check-in/Check-out Stats */}
         <div className="grid grid-cols-2 divide-x divide-border/50 border-b border-border/50 bg-muted/20">
           <div className="px-6 py-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              ✓ Check-in
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Check-in
+              </p>
+              <CheckCircle2 className="size-4" />
+            </div>
             <p className="tabular mt-2 text-2xl font-bold text-foreground">
               {data.checkInAt ? formatInZone(new Date(data.checkInAt), data.serverTimezone) : "—"}
             </p>
             {data.checkInAt && data.lateMinutes > 0 ? (
-              <p className="mt-1.5 flex items-center gap-1 text-[12px] font-semibold text-[oklch(0.42_0.11_76)]">
-                ⚠️ Terlambat {data.lateMinutes} menit
+              <p className="mt-1.5 flex items-center gap-2 text-[12px] font-semibold text-[oklch(0.42_0.11_76)]">
+                <AlertTriangle className="size-4" />
+                Terlambat {data.lateMinutes} menit
               </p>
             ) : null}
           </div>
           <div className="px-6 py-5">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              ✕ Check-out
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Check-out
+              </p>
+              <LogOut className="size-4" />
+            </div>
             <p className="tabular mt-2 text-2xl font-bold text-foreground">
               {data.checkOutAt ? formatInZone(new Date(data.checkOutAt), data.serverTimezone) : "—"}
             </p>
-            <p className="mt-1.5 text-[12px] font-medium text-muted-foreground">
+            <p className="mt-1.5 flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
               {hasCheckedIn && !hasCheckedOut
-                ? `⏳ ${formatDuration(elapsed)}`
+                ? <>
+                    <Clock className="size-4" />
+                    {formatDuration(elapsed)}
+                  </>
                 : data.checkInAt && hasCheckedOut
-                  ? `✓ ${formatDuration(data.workedMinutes)}`
+                  ? <>
+                      <CheckCircle2 className="size-4 text-green-600" />
+                      {formatDuration(data.workedMinutes)}
+                    </>
                   : "—"}
             </p>
           </div>
@@ -297,8 +318,9 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
           ) : null}
 
           {!data.isWorkingDay ? (
-            <p className="rounded-lg bg-amber-500/10 px-4 py-3.5 text-[13px] text-amber-700 dark:text-amber-400 border border-amber-500/20">
-              ℹ️ Hari ini bukan hari kerja Anda. Anda tetap dapat absen bila diperbolehkan admin.
+            <p className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-4 py-3.5 text-[13px] text-amber-700 dark:text-amber-400 border border-amber-500/20 font-medium">
+              <Info className="size-4 shrink-0 mt-0.5" />
+              <span>Hari ini bukan hari kerja Anda. Anda tetap dapat absen bila diperbolehkan admin.</span>
             </p>
           ) : null}
 
@@ -358,8 +380,9 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
             )}
           </form>
 
-          <p className="text-center text-[11.5px] leading-relaxed text-muted-foreground">
-            🔒 Waktu absensi dicatat dari server dan tidak dapat diubah dari perangkat ini.
+          <p className="flex items-center gap-2 text-center justify-center text-[11.5px] leading-relaxed text-muted-foreground">
+            <Lock className="size-4" />
+            Waktu absensi dicatat dari server dan tidak dapat diubah dari perangkat ini.
           </p>
         </div>
       </div>
@@ -423,7 +446,7 @@ function GeoNotice({
     return (
       <p className="flex items-start gap-3 rounded-lg bg-amber-500/15 px-4 py-3.5 text-[12.5px] text-amber-700 dark:text-amber-400 font-medium border border-amber-500/20">
         <Crosshair className="mt-0.5 size-4 shrink-0" />
-        <span>⚠️ Absensi tercatat di luar area yang ditentukan dan ditandai pada laporan.</span>
+        <span>Absensi tercatat di luar area yang ditentukan dan ditandai pada laporan.</span>
       </p>
     );
   }
