@@ -314,6 +314,13 @@ export function EmployeeDialog({
    */
   const [code, setCode] = useState<string>(employee?.employeeCode ?? "");
 
+  // Update code state when employee changes (e.g., switching between edit dialogs)
+  useEffect(() => {
+    if (isEdit && employee?.employeeCode) {
+      setCode(employee.employeeCode);
+    }
+  }, [employee?.employeeCode, isEdit]);
+
   const fetchCode = React.useCallback(async (forRole: Role) => {
     if (isEdit) return;
     const formData = new FormData();

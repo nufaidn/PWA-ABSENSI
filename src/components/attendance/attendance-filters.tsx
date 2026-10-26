@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { STATUS_DESCRIPTOR } from "@/lib/attendance/time";
+import { cn } from "@/lib/utils";
 import type { AttendanceStatus } from "@/lib/domain";
 
 const STATUS_OPTIONS: Array<{ value: AttendanceStatus | "ALL"; label: string }> = [
@@ -35,11 +36,17 @@ export function AttendanceFilters({
   showSearch = false,
   showStatus = true,
   extra,
+  embedded = false,
 }: {
   basePath: string;
   showSearch?: boolean;
   showStatus?: boolean;
   extra?: React.ReactNode;
+  /**
+   * Drops the card chrome so the filter row can live inside an existing
+   * `Surface` (the admin report card does this).
+   */
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,8 +87,21 @@ export function AttendanceFilters({
     Boolean(search) || Boolean(from) || Boolean(to) || status !== "ALL";
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 surface-elevated sm:p-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div
+      className={cn(
+        "flex flex-col gap-3",
+        !embedded &&
+          "rounded-xl border border-border bg-card p-4 surface-elevated sm:p-5",
+      )}
+    >
+      <div
+        className={cn(
+          "grid gap-3",
+          embedded
+            ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+            : "sm:grid-cols-2 lg:grid-cols-4",
+        )}
+      >
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="filter-from" className="text-[12px]">
             Dari tanggal

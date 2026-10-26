@@ -123,7 +123,6 @@ export async function createLeaveRequestAction(
       "/admin/leave",
       "/admin/reports",
       "/admin/overview",
-      "/admin/audit-log",
     ]) {
       revalidatePath(path);
     }

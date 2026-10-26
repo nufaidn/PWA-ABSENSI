@@ -16,6 +16,7 @@ export function Pagination({
   pageSize,
   basePath,
   searchParams,
+  unit = "catatan",
 }: {
   page: number;
   pageCount: number;
@@ -23,11 +24,13 @@ export function Pagination({
   pageSize: number;
   basePath: string;
   searchParams: Record<string, string | undefined>;
+  /** Noun used in the count line, e.g. "karyawan" on the report card list. */
+  unit?: string;
 }) {
   if (pageCount <= 1) {
     return (
       <p className="tabular px-5 py-3.5 text-[12.5px] text-muted-foreground sm:px-6">
-        {total} catatan
+        {total} {unit}
       </p>
     );
   }
@@ -47,7 +50,7 @@ export function Pagination({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3.5 sm:px-6">
       <p className="tabular text-[12.5px] text-muted-foreground">
-        Menampilkan {from}–{to} dari {total} catatan
+        Menampilkan {from}–{to} dari {total} {unit}
       </p>
 
       <nav aria-label="Paginasi" className="flex items-center gap-2">

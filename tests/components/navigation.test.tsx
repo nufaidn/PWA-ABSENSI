@@ -155,8 +155,8 @@ it("opens, closes on a second press, and reflects state via aria-expanded", asyn
     await click(screen.getByRole("button", { name: "Buka menu" }));
 
     const menu = screen.getByRole("menu");
-    // Audit log and settings live behind the overflow for an admin.
-    expect(menu).toHaveTextContent("Audit Log");
+    // Schedules and settings live behind the overflow for an admin.
+    expect(menu).toHaveTextContent("Jadwal Kerja");
     expect(menu).toHaveTextContent("Pengaturan");
   });
 

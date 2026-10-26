@@ -260,6 +260,27 @@ export async function getAttendanceReport(
   }
 
   const rollup = new Map<string, PerEmployeeSummary>();
+
+  // Seed a card for every employee matching the user filters. Without this an
+  // employee with no records in the range would silently disappear from the
+  // report, which reads as "this person does not exist" rather than "no data".
+  // A status filter is the exception: then only employees with a matching
+  // record belong in the result.
+  if (!filters.status || filters.status === "ALL") {
+    for (const user of users.values()) {
+      if (!matchesUserFilters(user, filters)) continue;
+      if (filters.userId && user.id !== filters.userId) continue;
+      rollup.set(user.id, {
+        userId: user.id,
+        name: user.name,
+        employeeCode: user.employeeCode,
+        department: user.department,
+        summary: emptySummary(),
+        averageWorkedMinutes: 0,
+      });
+    }
+  }
+
   for (const [key, group] of perEmployeeCounts) {
     const userId = key.split("|")[0];
     const user = users.get(userId);

@@ -195,8 +195,11 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-xl border border-border bg-card surface-elevated">
-        <div className="flex flex-col gap-1.5 border-b border-border px-5 py-4">
+      {/* Main Clock Card */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card to-card/50 shadow-lg backdrop-blur-sm">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent pointer-events-none" />
+        
+        <div className="relative flex flex-col gap-2 border-b border-border/50 px-6 py-6">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
               Waktu Server
@@ -208,69 +211,73 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
                 dotClassName={statusDescriptor.dotClassName}
               />
             ) : (
-              <span className="rounded-full bg-muted px-2.5 py-1 text-[12px] font-medium text-muted-foreground">
+              <span className="rounded-full bg-muted/60 px-3 py-1.5 text-[12px] font-medium text-muted-foreground backdrop-blur-sm">
                 Belum absen
               </span>
             )}
           </div>
-          <p className="tabular text-[34px] font-semibold leading-none tracking-tight text-foreground">
+          <p className="tabular text-5xl font-black leading-none tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-foreground to-foreground/70">
             {liveClock}
           </p>
-          <p className="text-[12px] text-muted-foreground">
-            Jadwal {data.startTime}–{data.endTime}
-            {data.lateToleranceMinutes > 0
-              ? ` · toleransi ${data.lateToleranceMinutes} menit`
-              : " · tanpa toleransi"}
-          </p>
-          {data.scheduleNote ? (
-            <p className="mt-1 text-[12px] italic leading-relaxed text-muted-foreground">
-              {data.scheduleNote}
+          <div className="mt-2 space-y-1.5">
+            <p className="text-[13px] text-muted-foreground">
+              📅 Jadwal <span className="font-semibold text-foreground">{data.startTime}–{data.endTime}</span>
+              {data.lateToleranceMinutes > 0
+                ? ` · ⏱️ toleransi ${data.lateToleranceMinutes} menit`
+                : " · tanpa toleransi"}
             </p>
-          ) : null}
-        </div>
-
-        <div className="grid grid-cols-2 divide-x divide-border border-b border-border">
-          <div className="px-5 py-4">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Check-in
-            </p>
-            <p className="tabular mt-1.5 text-xl font-semibold text-foreground">
-              {data.checkInAt ? formatInZone(new Date(data.checkInAt), data.serverTimezone) : "—"}
-            </p>
-            {data.checkInAt && data.lateMinutes > 0 ? (
-              <p className="mt-1 text-[12px] font-medium text-[oklch(0.42_0.11_76)]">
-                Terlambat {data.lateMinutes} menit
+            {data.scheduleNote ? (
+              <p className="text-[12px] italic leading-relaxed text-muted-foreground bg-muted/30 rounded px-2.5 py-1.5">
+                ℹ️ {data.scheduleNote}
               </p>
             ) : null}
           </div>
-          <div className="px-5 py-4">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              Check-out
+        </div>
+
+        {/* Check-in/Check-out Stats */}
+        <div className="grid grid-cols-2 divide-x divide-border/50 border-b border-border/50 bg-muted/20">
+          <div className="px-6 py-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              ✓ Check-in
             </p>
-            <p className="tabular mt-1.5 text-xl font-semibold text-foreground">
+            <p className="tabular mt-2 text-2xl font-bold text-foreground">
+              {data.checkInAt ? formatInZone(new Date(data.checkInAt), data.serverTimezone) : "—"}
+            </p>
+            {data.checkInAt && data.lateMinutes > 0 ? (
+              <p className="mt-1.5 flex items-center gap-1 text-[12px] font-semibold text-[oklch(0.42_0.11_76)]">
+                ⚠️ Terlambat {data.lateMinutes} menit
+              </p>
+            ) : null}
+          </div>
+          <div className="px-6 py-5">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              ✕ Check-out
+            </p>
+            <p className="tabular mt-2 text-2xl font-bold text-foreground">
               {data.checkOutAt ? formatInZone(new Date(data.checkOutAt), data.serverTimezone) : "—"}
             </p>
-            <p className="mt-1 text-[12px] text-muted-foreground">
+            <p className="mt-1.5 text-[12px] font-medium text-muted-foreground">
               {hasCheckedIn && !hasCheckedOut
-                ? `Berjalan ${formatDuration(elapsed)}`
+                ? `⏳ ${formatDuration(elapsed)}`
                 : data.checkInAt && hasCheckedOut
-                  ? `Durasi ${formatDuration(data.workedMinutes)}`
-                  : "Durasi —"}
+                  ? `✓ ${formatDuration(data.workedMinutes)}`
+                  : "—"}
             </p>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 px-5 py-4">
+        {/* Action Area */}
+        <div className="relative flex flex-col gap-4 px-6 py-6">
           <GeoNotice geo={geo} requireLocation={data.requireLocation} distanceMeters={data.distanceMeters} outsideRadius={data.outsideRadius} />
 
           {toast ? (
             <div
               role="status"
               className={cn(
-                "flex items-start gap-2.5 rounded-lg px-3.5 py-3 text-[13px] leading-relaxed ring-1 ring-inset",
+                "flex items-start gap-3 rounded-lg px-4 py-3.5 text-[13px] leading-relaxed font-medium ring-1 ring-inset animate-in fade-in slide-in-from-top-2 duration-300",
                 toast.tone === "ok"
-                  ? "bg-success-muted text-[oklch(0.34_0.08_163)] ring-success/25"
-                  : "bg-destructive/10 text-destructive ring-destructive/25",
+                  ? "bg-green-500/15 text-green-700 dark:text-green-400 ring-green-500/30"
+                  : "bg-destructive/15 text-destructive ring-destructive/30",
               )}
             >
               {toast.tone === "ok" ? (
@@ -283,21 +290,22 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
           ) : null}
 
           {state.error && !toast ? (
-            <p role="alert" className="text-[13px] text-destructive">
+            <p role="alert" className="flex items-center gap-2 text-[13px] font-medium text-destructive">
+              <AlertCircle className="size-4" />
               {state.error}
             </p>
           ) : null}
 
           {!data.isWorkingDay ? (
-            <p className="rounded-lg bg-muted px-3.5 py-3 text-[13px] text-muted-foreground">
-              Hari ini bukan hari kerja Anda. Anda tetap dapat absen bila diperbolehkan admin.
+            <p className="rounded-lg bg-amber-500/10 px-4 py-3.5 text-[13px] text-amber-700 dark:text-amber-400 border border-amber-500/20">
+              ℹ️ Hari ini bukan hari kerja Anda. Anda tetap dapat absen bila diperbolehkan admin.
             </p>
           ) : null}
 
           <form action={handleSubmit} className="w-full">
             {hasCheckedIn && hasCheckedOut ? (
-              <Button type="button" variant="secondary" size="lg" className="w-full" disabled>
-                <CheckCircle2 className="size-4" />
+              <Button type="button" variant="secondary" size="lg" className="w-full min-h-14 text-[15px] font-semibold" disabled>
+                <CheckCircle2 className="size-5" />
                 Absensi hari ini selesai
               </Button>
             ) : hasCheckedIn ? (
@@ -306,19 +314,21 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
                   type="submit"
                   size="lg"
                   variant="destructive"
-                  className="w-full min-h-14 text-[15px] font-semibold"
+                  className="w-full min-h-16 text-[16px] font-bold gap-2.5 shadow-md"
                   disabled={pending || isLocating}
                 >
                   {pending || isLocating ? (
-                    <Loader2 className="size-4 animate-spin" />
+                    <Loader2 className="size-5 animate-spin" />
                   ) : (
-                    <LogOut className="size-4" />
+                    <LogOut className="size-5" />
                   )}
-                  {isLocating
-                    ? "Mengambil lokasi…"
-                    : pending
-                      ? "Memproses…"
-                      : "Check-out Sekarang"}
+                  <span>
+                    {isLocating
+                      ? "Mengambil lokasi…"
+                      : pending
+                        ? "Memproses…"
+                        : "Check-out Sekarang"}
+                  </span>
                 </Button>
                 <input type="hidden" name="intent" value="check-out" />
               </>
@@ -327,19 +337,21 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
                 <Button
                   type="submit"
                   size="lg"
-                  className="w-full min-h-14 text-[15px] font-semibold"
+                  className="w-full min-h-16 text-[16px] font-bold gap-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg"
                   disabled={pending || isLocating}
                 >
                   {pending || isLocating ? (
-                    <Loader2 className="size-4 animate-spin" />
+                    <Loader2 className="size-5 animate-spin" />
                   ) : (
-                    <LogIn className="size-4" />
+                    <LogIn className="size-5" />
                   )}
-                  {isLocating
-                    ? "Mengambil lokasi…"
-                    : pending
-                      ? "Memproses…"
-                      : "Check-in Sekarang"}
+                  <span>
+                    {isLocating
+                      ? "Mengambil lokasi…"
+                      : pending
+                        ? "Memproses…"
+                        : "Check-in Sekarang"}
+                  </span>
                 </Button>
                 <input type="hidden" name="intent" value="check-in" />
               </>
@@ -347,7 +359,7 @@ export function AttendanceCard({ data }: { data: AttendanceCardData }) {
           </form>
 
           <p className="text-center text-[11.5px] leading-relaxed text-muted-foreground">
-            Waktu absensi dicatat dari server dan tidak dapat diubah dari perangkat ini.
+            🔒 Waktu absensi dicatat dari server dan tidak dapat diubah dari perangkat ini.
           </p>
         </div>
       </div>
@@ -368,8 +380,8 @@ function GeoNotice({
 }) {
   if (geo.status === "locating") {
     return (
-      <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
-        <Loader2 className="size-3.5 animate-spin" />
+      <p className="flex items-center gap-2.5 text-[13px] text-muted-foreground font-medium">
+        <Loader2 className="size-4 animate-spin" />
         Mengambil lokasi Anda…
       </p>
     );
@@ -379,18 +391,18 @@ function GeoNotice({
     return (
       <div
         className={cn(
-          "flex items-start gap-2 rounded-lg px-3.5 py-2.5 text-[12.5px] leading-relaxed",
+          "flex items-start gap-3 rounded-lg px-4 py-3.5 text-[12.5px] leading-relaxed font-medium border",
           requireLocation
-            ? "bg-destructive/10 text-destructive"
-            : "bg-muted text-muted-foreground",
+            ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+            : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20",
         )}
       >
-        <MapPinOff className="mt-0.5 size-3.5 shrink-0" />
+        <MapPinOff className="mt-0.5 size-4 shrink-0" />
         <span>
           {geo.message}
           {requireLocation ? " Lokasi wajib diaktifkan untuk absen." : ""}{" "}
-          <Link href="/pengaturan" className="font-medium underline underline-offset-2">
-            Periksa izin lokasi
+          <Link href="/pengaturan" className="font-semibold underline underline-offset-2 hover:opacity-80">
+            Periksa izin
           </Link>
         </span>
       </div>
@@ -399,20 +411,19 @@ function GeoNotice({
 
   if (geo.status === "granted") {
     return (
-      <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-        <Navigation className="size-3.5 shrink-0" />
-        Lokasi terkunci
-        {geo.accuracy > 0 ? ` ±${Math.round(geo.accuracy)} m` : ""}
-        {distanceMeters !== null ? ` · ${Math.round(distanceMeters)} m dari titik absensi` : ""}
+      <p className="flex items-center gap-2.5 text-[12.5px] text-green-700 dark:text-green-400 font-medium bg-green-500/10 rounded-lg px-3.5 py-2.5 border border-green-500/20">
+        <Navigation className="size-4 shrink-0" />
+        Lokasi terkunci {geo.accuracy > 0 ? `±${Math.round(geo.accuracy)}m` : ""}
+        {distanceMeters !== null ? ` · ${Math.round(distanceMeters)}m dari titik` : ""}
       </p>
     );
   }
 
   if (outsideRadius) {
     return (
-      <p className="flex items-start gap-2 rounded-lg bg-warning-muted px-3.5 py-2.5 text-[12.5px] text-[oklch(0.42_0.11_76)]">
-        <Crosshair className="mt-0.5 size-3.5 shrink-0" />
-        <span>Absensi tercatat di luar area yang ditentukan dan ditandai pada laporan.</span>
+      <p className="flex items-start gap-3 rounded-lg bg-amber-500/15 px-4 py-3.5 text-[12.5px] text-amber-700 dark:text-amber-400 font-medium border border-amber-500/20">
+        <Crosshair className="mt-0.5 size-4 shrink-0" />
+        <span>⚠️ Absensi tercatat di luar area yang ditentukan dan ditandai pada laporan.</span>
       </p>
     );
   }

@@ -12,7 +12,6 @@ import {
   FileClock,
   LayoutDashboard,
   MapPin,
-  ScrollText,
   Settings,
   UserCog,
   Users,
@@ -63,7 +62,6 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/leave", label: "Cuti & Izin", icon: CalendarPlus, minRole: "ADMIN" },
   { href: "/admin/schedules", label: "Jadwal Kerja", icon: ClipboardList, minRole: "ADMIN" },
   { href: "/admin/settings", label: "Pengaturan", icon: Settings, minRole: "ADMIN" },
-  { href: "/admin/audit-log", label: "Audit Log", icon: ScrollText, minRole: "ADMIN" },
 ];
 
 /**
@@ -220,8 +218,7 @@ export function MobileNav({
   // Five destinations fit comfortably in the employee bar — home, history,
   // leave, statistics and the gear tab. The profile tab lives behind the
   // overflow menu. Admins keep four daily pages (overview, reports, employees,
-  // leave) and reach schedules, settings and the audit log behind the overflow
-  // menu.
+  // leave) and reach schedules and settings behind the overflow menu.
   const primary: NavItem[] = isAdmin ? ADMIN_NAV.slice(0, 4) : EMPLOYEE_NAV.slice(0, 5);
 
   const overflow: NavItem[] = isAdmin ? ADMIN_NAV.slice(4) : EMPLOYEE_NAV.slice(5);

@@ -47,7 +47,6 @@ src/
         schedules/       CRUD jadwal kerja
         reports/         Laporan + filter + unduh PDF per karyawan
         settings/        Pengaturan global
-        audit-log/       Audit log
       profile/           Profil & ganti password
     api/
       attendance/report/[userId]  Route handler PDF laporan per karyawan
