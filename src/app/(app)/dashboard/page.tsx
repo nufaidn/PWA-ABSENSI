@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Clock, MapPin, TrendingUp, Hand } from "lucide-react";
+import { Calendar, MapPin, TrendingUp, Hand } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getTodaySummary } from "@/lib/dal/attendance";
 import { formatShortDate, isAttendanceRole } from "@/lib/attendance/time";
@@ -86,12 +86,6 @@ export default async function DashboardPage() {
             icon={TrendingUp}
             label="Statistik"
             description="Performa Anda"
-          />
-          <QuickLink
-            href="/cuti-izin"
-            icon={Clock}
-            label="Cuti & Izin"
-            description="Pengajuan"
           />
         </div>
 
