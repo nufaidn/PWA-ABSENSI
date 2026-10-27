@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
+  CalendarPlus,
   ChartColumn,
   CircleUserRound,
   ClipboardList,
