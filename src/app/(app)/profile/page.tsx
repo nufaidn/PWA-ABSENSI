@@ -4,7 +4,6 @@ import {
   ChevronRight,
   Mail,
   Phone,
-  ShieldCheck,
   Building2,
   Clock,
   User,
@@ -14,12 +13,6 @@ import {
 import { requireUser } from "@/lib/dal/auth";
 import { getEffectiveSchedule } from "@/lib/dal/settings";
 import { ROLE_LABEL } from "@/lib/attendance/time";
-import {
-  Surface,
-  SurfaceDescription,
-  SurfaceHeader,
-  SurfaceTitle,
-} from "@/components/layout/primitives";
 import { Chip, Monogram } from "@/components/layout/badges";
 import { ChangePasswordForm } from "@/components/profile/change-password-form";
 
@@ -33,93 +26,107 @@ export default async function ProfilePage() {
   const schedule = await getEffectiveSchedule(user.id);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
-      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Header Section */}
-        <div className="mb-8 rounded-xl bg-gradient-to-r from-primary/10 to-primary/5 p-6 border border-primary/20">
-          <div className="flex items-start gap-4 sm:items-center">
+    <div className="min-h-screen bg-background">
+      {/* Hero Section */}
+      <div className="relative overflow-hidden border-b border-border/50">
+        <div className="absolute inset-0 bg-gradient-to-r from-primary/8 via-primary/5 to-transparent" />
+        <div className="relative mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:gap-6">
             <Monogram name={user.name} size="lg" />
             <div className="flex-1">
-              <h1 className="text-[24px] font-bold tracking-tight text-foreground sm:text-[28px]">
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
                 {user.name}
               </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Chip>{ROLE_LABEL[user.role]}</Chip>
                 {user.department && (
-                  <span className="text-[12px] text-muted-foreground flex items-center gap-1">
+                  <div className="text-sm text-muted-foreground flex items-center gap-1.5 px-3 py-1 rounded-full bg-muted">
                     <Building2 className="size-3.5" />
-                    {user.department}
-                  </span>
+                    <span>{user.department}</span>
+                  </div>
                 )}
               </div>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="flex flex-col gap-4 sm:gap-6">
-          {/* Informasi Akun Section */}
-          <Surface className="overflow-hidden">
-            <SurfaceHeader>
-              <SurfaceTitle>Informasi Akun</SurfaceTitle>
-              <SurfaceDescription className="mt-1">
-                Detail profil Anda yang dikelola oleh sistem.
-              </SurfaceDescription>
-            </SurfaceHeader>
-
-            <div className="divide-y divide-border px-5 py-4 sm:px-6">
-              {/* Email */}
-              <div className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0">
-                <div className="flex items-center gap-3">
-                  <Mail className="size-4 text-primary shrink-0" />
-                  <div>
-                    <p className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Email
-                    </p>
-                    <p className="mt-1 text-[13.5px] font-medium truncate">{user.email}</p>
-                  </div>
+      {/* Main Content */}
+      <div className="mx-auto w-full max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Left Column - Main Info */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Account Information Card */}
+            <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 transition-all hover:border-border/80 hover:bg-card/80">
+              <div className="mb-6 flex items-center gap-3">
+                <div className="rounded-lg bg-primary/10 p-2">
+                  <User className="size-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Informasi Akun</h2>
+                  <p className="text-sm text-muted-foreground">Detail profil Anda</p>
                 </div>
               </div>
 
-              {/* Employee Code */}
-              {user.employeeCode && (
-                <div className="flex items-center justify-between gap-4 py-4">
-                  <div className="flex items-center gap-3">
-                    <User className="size-4 text-primary shrink-0" />
-                    <div>
-                      <p className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">
-                        Kode Karyawan
+              <div className="space-y-4">
+                {/* Email */}
+                <div className="flex items-center justify-between gap-4 pb-4 border-b border-border/50 last:border-0 last:pb-0">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <Mail className="size-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Email
                       </p>
-                      <p className="mt-1 tabular text-[13.5px] font-medium">{user.employeeCode}</p>
+                      <p className="mt-1 text-sm font-medium truncate text-foreground">
+                        {user.email}
+                      </p>
                     </div>
                   </div>
                 </div>
-              )}
 
-              {/* Phone */}
-              <div className="flex items-center justify-between gap-4 py-4">
-                <div className="flex items-center gap-3">
-                  <Phone className="size-4 text-primary shrink-0" />
-                  <div>
-                    <p className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">
-                      Telepon
-                    </p>
-                    <p className="mt-1 text-[13.5px] font-medium">{user.phone ?? "—"}</p>
+                {/* Employee Code */}
+                {user.employeeCode && (
+                  <div className="flex items-center justify-between gap-4 pb-4 border-b border-border/50">
+                    <div className="flex items-center gap-3">
+                      <User className="size-4 text-muted-foreground shrink-0" />
+                      <div>
+                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                          Kode Karyawan
+                        </p>
+                        <p className="mt-1 tabular text-sm font-medium text-foreground">
+                          {user.employeeCode}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Phone */}
+                <div className="flex items-center justify-between gap-4 pb-4 border-b border-border/50">
+                  <div className="flex items-center gap-3">
+                    <Phone className="size-4 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Telepon
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-foreground">
+                        {user.phone ?? "—"}
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Work Schedule */}
-              <div className="flex items-center justify-between gap-4 py-4">
-                <div className="flex items-center gap-3">
-                  <Clock className="size-4 text-primary shrink-0" />
+                {/* Work Schedule */}
+                <div className="flex items-center gap-3 pt-2">
+                  <Clock className="size-4 text-muted-foreground shrink-0" />
                   <div>
-                    <p className="text-[11.5px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       Jadwal Kerja
                     </p>
-                    <p className="mt-1 text-[13.5px] font-medium">
+                    <p className="mt-1 text-sm font-medium text-foreground">
                       {schedule.name}
                     </p>
-                    <p className="text-[12px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {schedule.startTime}–{schedule.endTime} · toleransi {schedule.lateToleranceMinutes} menit
                       {schedule.isOrganizationDefault ? " (default)" : ""}
                     </p>
@@ -127,50 +134,62 @@ export default async function ProfilePage() {
                 </div>
               </div>
             </div>
-          </Surface>
 
-          {/* Keamanan Section */}
-          <Surface className="overflow-hidden">
-            <SurfaceHeader>
-              <SurfaceTitle className="flex items-center gap-2">
-                <Key className="size-5 text-primary" />
-                Keamanan
-              </SurfaceTitle>
-              <SurfaceDescription className="mt-1">
-                Kelola password akun Anda. Password baru berlaku pada login berikutnya.
-              </SurfaceDescription>
-            </SurfaceHeader>
-            <ChangePasswordForm />
-          </Surface>
+            {/* Security Card */}
+            <div className="rounded-2xl border border-border/50 bg-card/50 backdrop-blur-sm p-6 transition-all hover:border-border/80 hover:bg-card/80">
+              <div className="mb-6 flex items-center gap-3">
+                <div className="rounded-lg bg-primary/10 p-2">
+                  <Key className="size-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Keamanan</h2>
+                  <p className="text-sm text-muted-foreground">Ubah password akun Anda</p>
+                </div>
+              </div>
+              <ChangePasswordForm />
+            </div>
+          </div>
 
-          {/* Pengaturan Section */}
-          <Surface className="overflow-hidden">
-            <SurfaceHeader>
-              <SurfaceTitle className="flex items-center gap-2">
-                <SettingsIcon className="size-5 text-primary" />
-                Pengaturan Perangkat
-              </SurfaceTitle>
-              <SurfaceDescription className="mt-1">
-                Kelola izin lokasi dan status pemasangan aplikasi pada perangkat Anda.
-              </SurfaceDescription>
-            </SurfaceHeader>
-            <div className="px-5 py-5 sm:px-6">
+          {/* Right Column - Settings */}
+          <div className="space-y-6">
+            {/* Settings Card */}
+            <div className="rounded-2xl border border-border/50 bg-gradient-to-br from-primary/10 to-primary/5 backdrop-blur-sm p-6 transition-all hover:border-primary/50 hover:from-primary/15 hover:to-primary/10">
+              <div className="mb-6 flex items-center gap-3">
+                <div className="rounded-lg bg-primary/20 p-2">
+                  <SettingsIcon className="size-5 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">Pengaturan</h3>
+                  <p className="text-xs text-muted-foreground">Kelola perangkat</p>
+                </div>
+              </div>
+
               <Link
                 href="/pengaturan"
-                className="group flex items-center justify-between gap-3 rounded-lg border border-border bg-gradient-to-r from-primary/5 to-transparent p-4 text-[13.5px] font-medium text-foreground transition-all hover:border-primary/50 hover:bg-primary/10 active:scale-95"
+                className="group relative flex items-center justify-between gap-3 rounded-xl px-4 py-3 bg-background/50 border border-border/30 text-sm font-medium text-foreground transition-all hover:bg-background hover:border-primary/50 active:scale-95"
               >
-                <span className="flex items-center gap-2.5">
-                  <ShieldCheck className="size-4 text-primary" />
-                  Buka Pengaturan Perangkat
-                </span>
-                <ChevronRight className="size-4 text-muted-foreground group-hover:translate-x-0.5 transition-transform" />
+                <span>Pengaturan Perangkat</span>
+                <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
               </Link>
-            </div>
-          </Surface>
 
-          {/* Footer Note */}
-          <div className="text-center text-[12px] text-muted-foreground p-4">
-            <p>Untuk mengubah data akun, hubungi administrator sistem.</p>
+              <div className="mt-4 space-y-3 rounded-xl bg-background/50 p-3 text-xs text-muted-foreground">
+                <p className="flex items-start gap-2">
+                  <span className="text-primary font-bold">•</span>
+                  <span>Izin lokasi untuk attendance</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-primary font-bold">•</span>
+                  <span>Status pemasangan aplikasi</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Info Card */}
+            <div className="rounded-2xl border border-border/50 bg-muted/30 p-4">
+              <p className="text-xs text-muted-foreground text-center">
+                Untuk mengubah data akun, hubungi administrator sistem.
+              </p>
+            </div>
           </div>
         </div>
       </div>
