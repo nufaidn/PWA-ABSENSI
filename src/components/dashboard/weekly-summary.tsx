@@ -68,7 +68,18 @@ export function WeeklySummary({
           gap: DESIGN_TOKENS.spacing[2],
         }}
       >
-        <Icon size={24} color={colorScheme.icon} strokeWidth={2} />
+        <div
+          style={{
+            width: "24px",
+            height: "24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: colorScheme.icon,
+          }}
+        >
+          <Icon className="w-6 h-6" />
+        </div>
 
         <p
           style={{

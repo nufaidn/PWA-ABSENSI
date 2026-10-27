@@ -1,15 +1,13 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getTodaySummary } from "@/lib/dal/attendance";
 import { isAttendanceRole } from "@/lib/attendance/time";
-import { checkOutAction } from "@/app/actions/attendance";
 import { GreetingSection } from "@/components/dashboard/greeting-section";
 import { HeroCard } from "@/components/dashboard/hero-card";
 import { WeeklySummary } from "@/components/dashboard/weekly-summary";
 import { QuickLinks } from "@/components/dashboard/quick-links";
+import { CheckoutButton } from "@/components/dashboard/checkout-button";
 
 export const metadata: Metadata = {
   title: "Beranda",
@@ -47,82 +45,10 @@ export default async function DashboardPage() {
           serverNow={today.serverNow.toISOString()}
           serverTimezone={timezone}
         >
-          {/* Action Button - Check-in or Check-out */}
-          <form action={checkOutAction} style={{ width: "100%" }}>
-            {attendance?.checkInAt && !attendance?.checkOutAt ? (
-              // Check-out button (if checked in but not checked out)
-              <Button
-                type="submit"
-                style={{
-                  width: "100%",
-                  height: "56px",
-                  background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
-                  color: "white",
-                  fontSize: "16px",
-                  fontWeight: 600,
-                  borderRadius: "12px",
-                  border: "none",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  boxShadow: "0 4px 12px rgba(220, 38, 38, 0.3)",
-                  transition: "all 200ms ease-in-out",
-                }}
-                onMouseEnter={(e) => {
-                  (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-                  (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 16px rgba(220, 38, 38, 0.4)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-                  (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(220, 38, 38, 0.3)";
-                }}
-              >
-                <LogOut size={20} />
-                Check-out Sekarang
-              </Button>
-            ) : (
-              // Check-in button or disabled
-              <Button
-                type="button"
-                style={{
-                  width: "100%",
-                  height: "56px",
-                  background: attendance?.checkInAt ? "#D1D5DB" : "linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)",
-                  color: "white",
-                  fontSize: "16px",
-                  fontWeight: 600,
-                  borderRadius: "12px",
-                  border: "none",
-                  cursor: attendance?.checkInAt ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "8px",
-                  boxShadow: attendance?.checkInAt ? "none" : "0 4px 12px rgba(37, 99, 235, 0.3)",
-                  opacity: attendance?.checkInAt ? 0.6 : 1,
-                  transition: "all 200ms ease-in-out",
-                }}
-                disabled={!!attendance?.checkInAt}
-                onMouseEnter={(e) => {
-                  if (!attendance?.checkInAt) {
-                    (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
-                    (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 16px rgba(37, 99, 235, 0.4)";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!attendance?.checkInAt) {
-                    (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
-                    (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(37, 99, 235, 0.3)";
-                  }
-                }}
-              >
-                Absensi hari ini selesai
-              </Button>
-            )}
-            <input type="hidden" name="intent" value="check-out" />
-          </form>
+          <CheckoutButton
+            isCheckedIn={!!attendance?.checkInAt}
+            isCheckedOut={!!attendance?.checkOutAt}
+          />
         </HeroCard>
 
         {/* Weekly Summary */}

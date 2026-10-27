@@ -3,8 +3,6 @@
 import { DESIGN_TOKENS } from "@/lib/design/tokens";
 
 interface ProgressRingProps {
-  /** Work hours completed */
-  workedHours: number;
   /** Work hours worked (in minutes, will be converted to hours) */
   workedMinutes: number;
   /** Target hours per day (default: 8) */

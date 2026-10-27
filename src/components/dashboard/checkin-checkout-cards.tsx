@@ -64,11 +64,18 @@ export function CheckinCheckoutCards({
           gap: DESIGN_TOKENS.spacing[2],
         }}
       >
-        <Icon
-          size={20}
-          color={isCheckIn ? DESIGN_TOKENS.colors.green[600] : DESIGN_TOKENS.colors.gray[400]}
-          strokeWidth={2}
-        />
+        <div
+          style={{
+            width: "20px",
+            height: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: isCheckIn ? DESIGN_TOKENS.colors.green[600] : DESIGN_TOKENS.colors.gray[400],
+          }}
+        >
+          <Icon className="w-5 h-5" />
+        </div>
         <span
           style={{
             fontSize: DESIGN_TOKENS.typography.fontSize.xs,

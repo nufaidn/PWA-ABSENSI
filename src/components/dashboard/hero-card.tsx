@@ -33,11 +33,12 @@ export function HeroCard({
   children,
 }: HeroCardProps) {
   // Real-time clock from server
-  const clock = useServerClock(serverNow, serverTimezone);
+  const clock = useServerClock(serverNow);
 
   // Format server time as HH:MM:SS
   const formatServerTime = () => {
-    return clock.toLocaleTimeString("id-ID", {
+    const date = new Date(clock);
+    return date.toLocaleTimeString("id-ID", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
@@ -47,24 +48,33 @@ export function HeroCard({
 
   // Get status badge info
   const getStatusBadge = () => {
-    const badges = {
-      ON_TIME: {
+    if (status === "PRESENT") {
+      return {
         label: "◯ Hadir",
         bgColor: DESIGN_TOKENS.colors.green[50],
         textColor: DESIGN_TOKENS.colors.green[700],
-      },
-      LATE: {
+      };
+    }
+    if (status === "LATE") {
+      return {
         label: "⚠ Terlambat",
         bgColor: DESIGN_TOKENS.colors.orange[50],
         textColor: DESIGN_TOKENS.colors.orange[700],
-      },
-      NOT_PRESENT: {
-        label: "○ Belum absen",
-        bgColor: DESIGN_TOKENS.colors.gray[100],
-        textColor: DESIGN_TOKENS.colors.gray[600],
-      },
+      };
+    }
+    if (status === "LEAVE") {
+      return {
+        label: "✓ Izin/Cuti",
+        bgColor: DESIGN_TOKENS.colors.blue[50],
+        textColor: DESIGN_TOKENS.colors.blue[700],
+      };
+    }
+    // Default for ABSENT, INCOMPLETE, HOLIDAY, or null
+    return {
+      label: "○ Belum absen",
+      bgColor: DESIGN_TOKENS.colors.gray[100],
+      textColor: DESIGN_TOKENS.colors.gray[600],
     };
-    return badges[status || "NOT_PRESENT"];
   };
 
   const statusBadge = getStatusBadge();

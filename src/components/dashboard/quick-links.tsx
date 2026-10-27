@@ -100,7 +100,17 @@ export function QuickLinks({ links }: QuickLinksProps) {
             background: `linear-gradient(135deg, ${colors.start} 0%, ${colors.end} 100%)`,
           }}
         >
-          <Icon color="white" size={20} strokeWidth={2} />
+          <div
+            style={{
+              width: "20px",
+              height: "20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Icon className="w-5 h-5 text-white" />
+          </div>
         </div>
 
         {/* Text Content */}
