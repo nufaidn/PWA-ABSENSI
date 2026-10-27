@@ -7,7 +7,7 @@ import {
   CalendarDays,
   ChartColumn,
   CircleUserRound,
-  ClipboardList,
+  Clock,
   FileClock,
   LayoutDashboard,
   MapPin,
@@ -56,7 +56,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/overview", label: "Ringkasan", icon: LayoutDashboard, minRole: "ADMIN" },
   { href: "/admin/reports", label: "Laporan", icon: FileClock, minRole: "ADMIN" },
   { href: "/admin/employees", label: "Karyawan", icon: Users, minRole: "ADMIN" },
-  { href: "/admin/schedules", label: "Jadwal Kerja", icon: ClipboardList, minRole: "ADMIN" },
+  { href: "/admin/schedules", label: "Jadwal Kerja", icon: Clock, minRole: "ADMIN" },
   { href: "/admin/settings", label: "Pengaturan", icon: Settings, minRole: "ADMIN" },
 ];
 
