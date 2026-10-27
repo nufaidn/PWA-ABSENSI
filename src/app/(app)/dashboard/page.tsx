@@ -28,7 +28,7 @@ export default async function DashboardPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(to bottom right, #f9fafb, #eff6ff 50%, #f9fafb)" }}>
-      <div style={{ maxWidth: "672px", margin: "0 auto", padding: "0" }}>
+      <div style={{ maxWidth: "672px", margin: "0 auto", padding: "0", width: "100%" }}>
         {/* Greeting Section */}
         <GreetingSection
           name={user.name}
@@ -68,6 +68,15 @@ export default async function DashboardPage() {
                   justifyContent: "center",
                   gap: "8px",
                   boxShadow: "0 4px 12px rgba(220, 38, 38, 0.3)",
+                  transition: "all 200ms ease-in-out",
+                }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+                  (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 16px rgba(220, 38, 38, 0.4)";
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                  (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(220, 38, 38, 0.3)";
                 }}
               >
                 <LogOut size={20} />
@@ -93,8 +102,21 @@ export default async function DashboardPage() {
                   gap: "8px",
                   boxShadow: attendance?.checkInAt ? "none" : "0 4px 12px rgba(37, 99, 235, 0.3)",
                   opacity: attendance?.checkInAt ? 0.6 : 1,
+                  transition: "all 200ms ease-in-out",
                 }}
                 disabled={!!attendance?.checkInAt}
+                onMouseEnter={(e) => {
+                  if (!attendance?.checkInAt) {
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(-2px)";
+                    (e.currentTarget as HTMLElement).style.boxShadow = "0 6px 16px rgba(37, 99, 235, 0.4)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!attendance?.checkInAt) {
+                    (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+                    (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 12px rgba(37, 99, 235, 0.3)";
+                  }
+                }}
               >
                 Absensi hari ini selesai
               </Button>

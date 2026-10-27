@@ -311,11 +311,22 @@ export function MobileNav({
                   href={item.href}
                   aria-current={active ? "page" : undefined}
                   className={cn(
-                    "flex min-h-[3.25rem] flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition-colors",
-                    active ? "text-primary" : "text-muted-foreground",
+                    "relative flex min-h-[3.25rem] flex-col items-center justify-center gap-1 px-1 py-2.5 text-[10px] font-medium transition-all",
+                    active ? "text-primary" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  <Icon className={cn("size-[19px]", active && "stroke-[2.25]")} />
+                  {/* Pill indicator for active tab */}
+                  {active && (
+                    <div
+                      className="absolute inset-0 top-1 rounded-full bg-primary/10 -z-10"
+                      style={{
+                        height: "32px",
+                        margin: "0 4px",
+                        borderRadius: "99px",
+                      }}
+                    />
+                  )}
+                  <Icon className={cn("size-[19px] transition-all", active ? "stroke-[2.25]" : "stroke-2")} />
                   <span className="max-w-full truncate">{item.label}</span>
                 </Link>
               </li>
