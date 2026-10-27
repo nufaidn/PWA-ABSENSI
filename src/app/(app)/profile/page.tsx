@@ -116,9 +116,9 @@ export default async function ProfilePage() {
 
         <Surface className="overflow-hidden">
           <SurfaceHeader>
-            <SurfaceTitle>Perangkat</SurfaceTitle>
+            <SurfaceTitle>Pengaturan</SurfaceTitle>
             <SurfaceDescription className="mt-1">
-              Periksa izin lokasi dan status pemasangan aplikasi pada perangkat ini.
+              Kelola izin lokasi dan status pemasangan aplikasi pada perangkat Anda.
             </SurfaceDescription>
           </SurfaceHeader>
           <div className="px-5 py-5 sm:px-6">
@@ -128,7 +128,7 @@ export default async function ProfilePage() {
             >
               <span className="flex items-center gap-2.5">
                 <ShieldCheck className="size-4 text-primary" />
-                Izin &amp; status perangkat
+                Buka Pengaturan
               </span>
               <ChevronRight className="size-4 text-muted-foreground" />
             </Link>

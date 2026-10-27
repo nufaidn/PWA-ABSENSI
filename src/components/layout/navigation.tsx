@@ -50,7 +50,6 @@ export const EMPLOYEE_NAV: NavItem[] = [
   { href: "/dashboard", label: "Beranda", icon: LayoutDashboard },
   { href: "/attendance", label: "Riwayat", icon: CalendarDays },
   { href: "/statistics", label: "Statistik", icon: ChartColumn },
-  { href: "/pengaturan", label: "Pengaturan", icon: Settings },
   { href: "/profile", label: "Profil", icon: CircleUserRound },
 ];
 
