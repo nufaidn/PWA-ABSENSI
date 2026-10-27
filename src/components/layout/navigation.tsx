@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
-  CalendarPlus,
   ChartColumn,
   CircleUserRound,
   ClipboardList,
@@ -57,7 +56,6 @@ export const ADMIN_NAV: NavItem[] = [
   { href: "/admin/overview", label: "Ringkasan", icon: LayoutDashboard, minRole: "ADMIN" },
   { href: "/admin/reports", label: "Laporan", icon: FileClock, minRole: "ADMIN" },
   { href: "/admin/employees", label: "Karyawan", icon: Users, minRole: "ADMIN" },
-  { href: "/admin/leave", label: "Cuti & Izin", icon: CalendarPlus, minRole: "ADMIN" },
   { href: "/admin/schedules", label: "Jadwal Kerja", icon: ClipboardList, minRole: "ADMIN" },
   { href: "/admin/settings", label: "Pengaturan", icon: Settings, minRole: "ADMIN" },
 ];
