@@ -175,7 +175,8 @@ export function HeroCard({
           gap: DESIGN_TOKENS.spacing[2],
           marginTop: DESIGN_TOKENS.spacing[3],
           fontSize: DESIGN_TOKENS.typography.fontSize.xs,
-          color: DESIGN_TOKENS.colors.gray[500],
+          color: "white",
+          opacity: 0.8,
           textAlign: "center",
         }}
       >
