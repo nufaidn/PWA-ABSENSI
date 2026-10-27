@@ -26,7 +26,7 @@ export default async function DashboardPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(to bottom right, #f9fafb, #eff6ff 50%, #f9fafb)" }}>
-      <div style={{ maxWidth: "672px", margin: "0 auto", padding: "0", width: "100%" }}>
+      <div style={{ maxWidth: "672px", margin: "0 auto", padding: "0 16px", paddingBottom: "100px", width: "100%" }}>
         {/* Greeting Section */}
         <GreetingSection
           name={user.name}

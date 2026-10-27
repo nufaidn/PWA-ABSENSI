@@ -85,7 +85,7 @@ export function HeroCard({
         background: DESIGN_TOKENS.gradients.heroCard,
         borderRadius: DESIGN_TOKENS.borderRadius["4xl"],
         padding: DESIGN_TOKENS.componentSizes.heroCardPadding,
-        margin: `0 ${DESIGN_TOKENS.spacing[4]}px ${DESIGN_TOKENS.spacing[4]}px`,
+        margin: `${DESIGN_TOKENS.spacing[4]}px 0`,
         boxShadow: DESIGN_TOKENS.shadows.lg,
         color: "white",
       }}

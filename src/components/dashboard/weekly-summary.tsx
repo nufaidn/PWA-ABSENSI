@@ -109,7 +109,7 @@ export function WeeklySummary({
   return (
     <div
       style={{
-        padding: `0 ${DESIGN_TOKENS.spacing[4]}px`,
+        padding: "0",
         marginTop: DESIGN_TOKENS.spacing[4],
         marginBottom: DESIGN_TOKENS.spacing[4],
       }}

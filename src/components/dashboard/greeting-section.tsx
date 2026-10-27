@@ -65,9 +65,7 @@ export function GreetingSection({
   return (
     <div
       style={{
-        padding: `0 ${DESIGN_TOKENS.spacing[4]}px`,
-        paddingTop: DESIGN_TOKENS.spacing[4],
-        paddingBottom: DESIGN_TOKENS.spacing[4],
+        padding: `${DESIGN_TOKENS.spacing[4]}px 0`,
       }}
     >
       {/* Date */}

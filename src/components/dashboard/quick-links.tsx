@@ -142,8 +142,8 @@ export function QuickLinks({ links }: QuickLinksProps) {
   return (
     <div
       style={{
-        padding: `0 ${DESIGN_TOKENS.spacing[4]}px ${DESIGN_TOKENS.spacing[4]}px`,
-        marginBottom: DESIGN_TOKENS.spacing[10], // Extra space for bottom nav
+        padding: `0 ${DESIGN_TOKENS.spacing[4]}px`,
+        marginTop: DESIGN_TOKENS.spacing[4],
       }}
     >
       <div
