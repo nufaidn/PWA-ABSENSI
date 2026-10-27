@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Calendar, MapPin, TrendingUp, Hand } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getTodaySummary } from "@/lib/dal/attendance";
 import { formatShortDate, isAttendanceRole } from "@/lib/attendance/time";
