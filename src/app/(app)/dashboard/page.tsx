@@ -34,22 +34,22 @@ export default async function DashboardPage() {
   const { attendance, schedule, timezone } = today;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-50">
       <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
         {/* Header Section */}
         <header className="mb-8">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[12px] font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="text-[12px] font-medium uppercase tracking-wide text-slate-500">
                 {formatShortDate(today.serverNow, timezone)}
               </p>
               <div className="mt-2 flex items-center gap-3">
-                <h1 className="text-[28px] font-bold tracking-tight text-foreground sm:text-[32px]">
+                <h1 className="text-[28px] font-bold tracking-tight bg-gradient-to-r from-slate-900 via-blue-800 to-slate-900 bg-clip-text text-transparent sm:text-[32px]">
                   Halo, {user.name.split(" ")[0]}
                 </h1>
               </div>
               {user.department && (
-                <p className="mt-1 text-[14px] text-muted-foreground">{user.department}</p>
+                <p className="mt-1 text-[14px] text-slate-600 font-medium">{user.department}</p>
               )}
             </div>
           </div>
@@ -86,12 +86,14 @@ export default async function DashboardPage() {
             icon={TrendingUp}
             label="Statistik"
             description="Performa Anda"
+            gradient="from-blue-500 to-blue-600"
           />
           <QuickLink
             href="/cuti-izin"
             icon={Clock}
             label="Cuti & Izin"
             description="Pengajuan"
+            gradient="from-cyan-500 to-blue-500"
           />
         </div>
 
@@ -125,20 +127,25 @@ interface QuickLinkProps {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   description: string;
+  gradient: string;
 }
 
-function QuickLink({ href, icon: Icon, label, description }: QuickLinkProps) {
+function QuickLink({ href, icon: Icon, label, description, gradient }: QuickLinkProps) {
   return (
     <Link
       href={href}
-      className="group relative overflow-hidden rounded-lg border border-border bg-card p-3 transition-all hover:border-primary/50 hover:bg-card hover:shadow-md active:scale-95 sm:p-4"
+      className="group relative overflow-hidden rounded-2xl border-0 bg-white shadow-sm transition-all hover:shadow-lg active:scale-95 sm:p-0"
     >
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-      <div className="relative flex flex-col gap-2">
-        <Icon className="size-5 text-muted-foreground transition-colors group-hover:text-primary sm:size-6" />
+      {/* Gradient overlay on hover */}
+      <div className={`absolute inset-0 opacity-0 transition-opacity group-hover:opacity-5 bg-gradient-to-br ${gradient}`} />
+      
+      <div className="relative flex flex-col gap-2 p-3 sm:p-4">
+        <div className={`inline-flex w-fit rounded-full bg-gradient-to-br ${gradient} p-2`}>
+          <Icon className="size-5 text-white sm:size-6" />
+        </div>
         <div>
-          <p className="text-[13px] font-semibold text-foreground sm:text-[14px]">{label}</p>
-          <p className="text-[11px] text-muted-foreground sm:text-[12px]">{description}</p>
+          <p className="text-[13px] font-semibold text-slate-900 sm:text-[14px]">{label}</p>
+          <p className="text-[11px] text-slate-600 sm:text-[12px]">{description}</p>
         </div>
       </div>
     </Link>
