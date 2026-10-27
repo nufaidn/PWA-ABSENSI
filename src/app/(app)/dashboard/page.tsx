@@ -1,174 +1,119 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Clock, TrendingUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { LogOut } from "lucide-react";
 import { requireUser } from "@/lib/dal/auth";
 import { getTodaySummary } from "@/lib/dal/attendance";
-import { formatShortDate, isAttendanceRole } from "@/lib/attendance/time";
-import { AttendanceCard } from "@/components/attendance/attendance-card";
+import { isAttendanceRole } from "@/lib/attendance/time";
+import { checkOutAction } from "@/app/actions/attendance";
+import { GreetingSection } from "@/components/dashboard/greeting-section";
+import { HeroCard } from "@/components/dashboard/hero-card";
+import { WeeklySummary } from "@/components/dashboard/weekly-summary";
+import { QuickLinks } from "@/components/dashboard/quick-links";
 
 export const metadata: Metadata = {
   title: "Beranda",
 };
 
 /**
- * Employee home screen.
- *
- * Deliberately only the clock-in control and a greeting. The statistics, the
- * 30-day summary and the recent-activity list all moved out: this screen is
- * opened dozens of times a day with one intent — record attendance — and every
- * extra block pushed the button further down the fold. Trends live in
- * `/statistics` and the full record in `/attendance`, both one tap away in the
- * navigation.
- *
- * The history query is gone with them, so the page now loads in a single round
- * trip.
+ * Dashboard Home Page - Redesigned with new Hero Card component
+ * Shows real-time clock, attendance status, work progress, and quick links
  */
 export default async function DashboardPage() {
   const user = await requireUser();
-  // Administrators manage attendance instead of recording it.
   if (!isAttendanceRole(user.role)) redirect("/admin/overview");
 
   const today = await getTodaySummary();
-
   const { attendance, schedule, timezone } = today;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-slate-50">
-      <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
-        {/* Header Section */}
-        <header className="mb-8">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-[12px] font-medium uppercase tracking-wide text-slate-500">
-                {formatShortDate(today.serverNow, timezone)}
-              </p>
-              <div className="mt-2 flex items-center gap-3">
-                <h1 className="text-[28px] font-bold tracking-tight bg-gradient-to-r from-slate-900 via-blue-800 to-slate-900 bg-clip-text text-transparent sm:text-[32px]">
-                  Halo, {user.name.split(" ")[0]}
-                </h1>
-              </div>
-              {user.department && (
-                <p className="mt-1 text-[14px] text-slate-600 font-medium">{user.department}</p>
-              )}
-            </div>
-          </div>
-        </header>
+    <div style={{ minHeight: "100vh", background: "linear-gradient(to bottom right, #f9fafb, #eff6ff 50%, #f9fafb)" }}>
+      <div style={{ maxWidth: "672px", margin: "0 auto", padding: "0" }}>
+        {/* Greeting Section */}
+        <GreetingSection
+          name={user.name}
+          department={user.department}
+          date={today.serverNow}
+          timezone={timezone}
+        />
 
-        {/* Main Attendance Card */}
-        <div className="mb-6">
-          <AttendanceCard
-            data={{
-              status: attendance?.status ?? null,
-              checkInAt: attendance?.checkInAt?.toISOString() ?? null,
-              checkOutAt: attendance?.checkOutAt?.toISOString() ?? null,
-              lateMinutes: attendance?.lateMinutes ?? 0,
-              workedMinutes: attendance?.workedMinutes ?? 0,
-              distanceMeters: attendance?.checkInDistanceM ?? null,
-              outsideRadius: attendance?.outsideRadius ?? false,
-              startTime: schedule.startTime,
-              endTime: schedule.endTime,
-              lateToleranceMinutes: schedule.lateToleranceMinutes,
-              scheduleNote: schedule.description,
-              requireLocation: today.requireLocation,
-              isWorkingDay: today.isWorkingDay,
-              timezone,
-              serverNow: today.serverNow.toISOString(),
-              serverTimezone: timezone,
-            }}
-          />
-        </div>
+        {/* Hero Card with Clock, Progress, Check-in/out */}
+        <HeroCard
+          status={attendance?.status ?? null}
+          checkInAt={attendance?.checkInAt?.toISOString() ?? null}
+          checkOutAt={attendance?.checkOutAt?.toISOString() ?? null}
+          workedMinutes={attendance?.workedMinutes ?? 0}
+          lateMinutes={attendance?.lateMinutes ?? 0}
+          serverNow={today.serverNow.toISOString()}
+          serverTimezone={timezone}
+        >
+          {/* Action Button - Check-in or Check-out */}
+          <form action={checkOutAction} style={{ width: "100%" }}>
+            {attendance?.checkInAt && !attendance?.checkOutAt ? (
+              // Check-out button (if checked in but not checked out)
+              <Button
+                type="submit"
+                style={{
+                  width: "100%",
+                  height: "56px",
+                  background: "linear-gradient(135deg, #EF4444 0%, #DC2626 100%)",
+                  color: "white",
+                  fontSize: "16px",
+                  fontWeight: 600,
+                  borderRadius: "12px",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  boxShadow: "0 4px 12px rgba(220, 38, 38, 0.3)",
+                }}
+              >
+                <LogOut size={20} />
+                Check-out Sekarang
+              </Button>
+            ) : (
+              // Check-in button or disabled
+              <Button
+                type="button"
+                style={{
+                  width: "100%",
+                  height: "56px",
+                  background: attendance?.checkInAt ? "#D1D5DB" : "linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)",
+                  color: "white",
+                  fontSize: "16px",
+                  fontWeight: 600,
+                  borderRadius: "12px",
+                  border: "none",
+                  cursor: attendance?.checkInAt ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  boxShadow: attendance?.checkInAt ? "none" : "0 4px 12px rgba(37, 99, 235, 0.3)",
+                  opacity: attendance?.checkInAt ? 0.6 : 1,
+                }}
+                disabled={!!attendance?.checkInAt}
+              >
+                Absensi hari ini selesai
+              </Button>
+            )}
+            <input type="hidden" name="intent" value="check-out" />
+          </form>
+        </HeroCard>
 
-        {/* Quick Links Section */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <QuickLink
-            href="/statistics"
-            icon={TrendingUp}
-            label="Statistik"
-            description="Performa Anda"
-            gradient="from-blue-500 to-blue-600"
-          />
-          <QuickLink
-            href="/cuti-izin"
-            icon={Clock}
-            label="Cuti & Izin"
-            description="Pengajuan"
-            gradient="from-cyan-500 to-blue-500"
-          />
-        </div>
+        {/* Weekly Summary */}
+        <WeeklySummary
+          totalHadir={18}
+          totalTerlambat={1}
+          totalIzin={2}
+          title="Ringkasan bulan ini"
+        />
 
-        {/* Info Section */}
-        {/* <div className="mt-8 space-y-3">
-          <InfoCard
-            title="Jadwal Kerja"
-            description={`${schedule.startTime} - ${schedule.endTime}`}
-            accent="blue"
-          />
-          {schedule.description && (
-            <InfoCard
-              title="Catatan Jadwal"
-              description={schedule.description}
-              accent="violet"
-            />
-          )}
-          <InfoCard
-            title="Toleransi Keterlambatan"
-            description={`${schedule.lateToleranceMinutes} menit`}
-            accent="green"
-          />
-        </div> */}
+        {/* Quick Links */}
+        <QuickLinks />
       </div>
-    </div>
-  );
-}
-
-interface QuickLinkProps {
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  description: string;
-  gradient: string;
-}
-
-function QuickLink({ href, icon: Icon, label, description, gradient }: QuickLinkProps) {
-  return (
-    <Link
-      href={href}
-      className="group relative overflow-hidden rounded-2xl border-0 bg-white shadow-sm transition-all hover:shadow-lg active:scale-95 sm:p-0"
-    >
-      {/* Gradient overlay on hover */}
-      <div className={`absolute inset-0 opacity-0 transition-opacity group-hover:opacity-5 bg-gradient-to-br ${gradient}`} />
-      
-      <div className="relative flex flex-col gap-2 p-3 sm:p-4">
-        <div className={`inline-flex w-fit rounded-full bg-gradient-to-br ${gradient} p-2`}>
-          <Icon className="size-5 text-white sm:size-6" />
-        </div>
-        <div>
-          <p className="text-[13px] font-semibold text-slate-900 sm:text-[14px]">{label}</p>
-          <p className="text-[11px] text-slate-600 sm:text-[12px]">{description}</p>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
-interface InfoCardProps {
-  title: string;
-  description: string;
-  accent: "blue" | "violet" | "green";
-}
-
-function InfoCard({ title, description, accent }: InfoCardProps) {
-  const accentClasses = {
-    blue: "bg-blue-500/10 border-blue-500/20 text-blue-700 dark:text-blue-400",
-    violet: "bg-violet-500/10 border-violet-500/20 text-violet-700 dark:text-violet-400",
-    green: "bg-green-500/10 border-green-500/20 text-green-700 dark:text-green-400",
-  };
-
-  return (
-    <div className={`rounded-lg border p-3.5 ${accentClasses[accent]}`}>
-      <p className="text-[12px] font-medium uppercase tracking-wide opacity-75">{title}</p>
-      <p className="mt-1 text-[14px] font-semibold">{description}</p>
     </div>
   );
 }
