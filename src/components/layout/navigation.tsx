@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   CalendarDays,
-  CalendarPlus,
   ChartColumn,
   CircleUserRound,
   ClipboardList,
@@ -49,7 +48,6 @@ const RANK = ROLE_RANK;
 export const EMPLOYEE_NAV: NavItem[] = [
   { href: "/dashboard", label: "Beranda", icon: LayoutDashboard },
   { href: "/attendance", label: "Riwayat", icon: CalendarDays },
-  { href: "/cuti-izin", label: "Cuti & Izin", icon: CalendarPlus },
   { href: "/statistics", label: "Statistik", icon: ChartColumn },
   { href: "/pengaturan", label: "Pengaturan", icon: Settings },
   { href: "/profile", label: "Profil", icon: CircleUserRound },
