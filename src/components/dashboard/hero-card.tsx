@@ -35,15 +35,13 @@ export function HeroCard({
   // Real-time clock from server
   const clock = useServerClock(serverNow);
 
-  // Format server time as HH:MM:SS
+  // Format server time as HH:MM:SS (manual format to use colon separator)
   const formatServerTime = () => {
     const date = new Date(clock);
-    return date.toLocaleTimeString("id-ID", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    });
+    const hours = String(date.getHours()).padStart(2, "0");
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const seconds = String(date.getSeconds()).padStart(2, "0");
+    return `${hours}:${minutes}:${seconds}`;
   };
 
   // Get status badge info
@@ -136,6 +134,7 @@ export function HeroCard({
           letterSpacing: "-0.02em",
           lineHeight: 1,
         }}
+        suppressHydrationWarning
       >
         {formatServerTime()}
       </p>
@@ -158,13 +157,17 @@ export function HeroCard({
       <CheckinCheckoutCards checkInAt={checkInAt} checkOutAt={checkOutAt} />
 
       {/* Action Button Section */}
-      <div
-        style={{
-          marginTop: DESIGN_TOKENS.spacing[4],
-        }}
-      >
-        {children}
-      </div>
+      {children && (
+        <div
+          style={{
+            marginTop: DESIGN_TOKENS.spacing[4],
+            paddingTop: DESIGN_TOKENS.spacing[4],
+            borderTop: `1px solid rgba(255, 255, 255, 0.2)`,
+          }}
+        >
+          {children}
+        </div>
+      )}
 
       {/* Security Note */}
       <div

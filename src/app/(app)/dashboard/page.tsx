@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/dal/auth";
-import { getTodaySummary } from "@/lib/dal/attendance";
+import { getTodaySummary, getOwnHistory } from "@/lib/dal/attendance";
 import { isAttendanceRole } from "@/lib/attendance/time";
 import { GreetingSection } from "@/components/dashboard/greeting-section";
 import { HeroCard } from "@/components/dashboard/hero-card";
@@ -23,6 +23,24 @@ export default async function DashboardPage() {
 
   const today = await getTodaySummary();
   const { attendance, schedule, timezone } = today;
+
+  // Get this month's summary
+  const now = today.serverNow;
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    .toISOString()
+    .split("T")[0];
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+    .toISOString()
+    .split("T")[0];
+
+  const monthlySummary = await getOwnHistory({
+    page: 1,
+    pageSize: 1000, // Get all records for the month
+    from: monthStart,
+    to: monthEnd,
+  });
+
+  const { present, late, leave, incomplete } = monthlySummary.summary;
 
   return (
     <div style={{ minHeight: "100vh", background: "linear-gradient(to bottom right, #f9fafb, #eff6ff 50%, #f9fafb)" }}>
@@ -53,9 +71,9 @@ export default async function DashboardPage() {
 
         {/* Weekly Summary */}
         <WeeklySummary
-          totalHadir={18}
-          totalTerlambat={1}
-          totalIzin={2}
+          totalHadir={present}
+          totalTerlambat={late}
+          totalIzin={leave + incomplete}
           title="Ringkasan bulan ini"
         />
 
