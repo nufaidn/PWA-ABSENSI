@@ -35,6 +35,27 @@ export function HeroCard({
   // Real-time clock from server
   const clock = useServerClock(serverNow);
 
+  // Calculate real-time worked minutes
+  const getRealTimeWorkedMinutes = () => {
+    // If already checked out, use stored workedMinutes
+    if (checkOutAt) {
+      return workedMinutes;
+    }
+    
+    // If not checked in yet, return 0
+    if (!checkInAt) {
+      return 0;
+    }
+    
+    // Calculate from checkInAt to now
+    const checkInTime = new Date(checkInAt).getTime();
+    const nowTime = clock;
+    const elapsedMs = nowTime - checkInTime;
+    const elapsedMinutes = Math.max(0, Math.floor(elapsedMs / 60000));
+    
+    return elapsedMinutes;
+  };
+
   // Format server time as HH:MM:SS (manual format to use colon separator)
   const formatServerTime = () => {
     const date = new Date(clock);
@@ -76,6 +97,7 @@ export function HeroCard({
   };
 
   const statusBadge = getStatusBadge();
+  const realTimeWorkedMinutes = getRealTimeWorkedMinutes();
 
   return (
     <div
@@ -150,7 +172,7 @@ export function HeroCard({
           borderRadius: DESIGN_TOKENS.borderRadius["2xl"],
         }}
       >
-        <ProgressRing workedMinutes={workedMinutes} />
+        <ProgressRing workedMinutes={realTimeWorkedMinutes} />
       </div>
 
       {/* Check-in / Check-out Cards */}
